@@ -1,0 +1,11 @@
+DEPENDENCIES:
+ConfigParser
+matplotlib
+numpy
+simplejson
+astropy
+scipy
+argparse
+healpy
+skewnorm_boost
+colorlog

@@ -16,19 +16,19 @@ import traceback
 import warnings
 from astropy.table import Table
 from unidam.iso.model_fitter import model_fitter as mf
-from unidam.iso.distanceestimator import DistanceEstimator, get_table
+from unidam.iso.unidam_main import UniDAMTool, get_table
 from unidam.utils.constants import AGE_RANGE
 
 np.set_printoptions(linewidth=200)
 parser = argparse.ArgumentParser(description="""
 Tool to estimate distances to stars.
 """, formatter_class=argparse.RawDescriptionHelpFormatter)
-parser.add_argument('-i', '--input', type=str, default=None,
-                    help='Input file name')
+parser.add_argument('-i', '--input', type=str, default=None, 
+                    required=True, help='Input file name')
 parser.add_argument('-o', '--output', type=str, default='result.fits',
                     help='Output file name')
 parser.add_argument('-c', '--config', type=str,
-                    default='dinstanceestimator.conf',
+                    default=None,
                     help='Config file name')
 parser.add_argument('--id', type=str, default=None,
                     help='Run for just a single ID')
@@ -43,7 +43,7 @@ args = parser.parse_args()
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     data = Table.read(args.input)
-de = DistanceEstimator(config_filename=args.config)
+de = UniDAMTool(config_filename=args.config)
 
 de.id_column = 'id'
 idtype = data.columns[de.id_column].dtype

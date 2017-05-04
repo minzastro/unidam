@@ -35,7 +35,7 @@ class NumpyAwareJSONEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
-class DistanceEstimator(object):
+class UniDAMTool(object):
     """
     Estimating distance and extinction
     from model fitting + 2MASS/AllWISE magnitudes.
@@ -59,7 +59,7 @@ class DistanceEstimator(object):
                     'extinction': 0.001,
                     'parallax': 0.00}
 
-    def __init__(self, config_filename='distanceestimator.conf'):
+    def __init__(self, config_filename=None):
         self.mag = None
         self.mag_matrix = None
         self.mag_err = None
@@ -73,6 +73,9 @@ class DistanceEstimator(object):
         self.dump_pdf_file = None
         config = ConfigParser()
         config.optionxform = str
+        if config_filename is None:
+            config_filename = os.path.join(os.path.dirname(__file__),
+                                           'unidam.conf')
         config.read(config_filename)
         self.fitted_columns = OrderedDict(config.items('fitted_columns'))
         for key, value in self.DEFAULTS.iteritems():
@@ -113,13 +116,16 @@ class DistanceEstimator(object):
                    for band in constants.R_FACTORS.keys()}
         self.RV = {band: constants.R_FACTORS[band] / constants.R_FACTORS['V']
                    for band in constants.R_FACTORS.keys()}
-        self._load_models(config.get('general', 'model_file'))
+        self._load_models(os.path.join(os.path.dirname(__file__),
+                                       config.get('general', 'model_file')))
 
     def _load_models(self, filename):
         """
         Load models from Numpy or fits file.
         Send them to FORTRAN module.
         """
+        if not os.path.exists(filename):
+            raise Exception('Model file %s is not found' % filename)
         table = fits.open(filename)[1]
         if os.path.exists(filename + '.npy'):
             self.model_data = np.load(filename + '.npy')

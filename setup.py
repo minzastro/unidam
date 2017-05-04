@@ -19,7 +19,8 @@ setup(name='unidam',
       ext_modules=[model_fitter],
       install_requires=[
           'numpy', 'scipy', 'astropy',
-          'simplejson'
+          'simplejson', 'healpy', 'matplotlib',
+          'configparser', 'colorlog', 'argparse'
       ],
       scripts=['unidam/iso/unidam_runner.py'],
       zip_safe=False)

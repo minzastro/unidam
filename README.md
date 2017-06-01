@@ -8,8 +8,9 @@ What you will need to run UniDAM (apart from UniDAM itself) is the following:
 
 2) Data file. Should be a fits or votable with the following columns:
 
-| T       | K           |
+| Value   | Units       |
 |---------|-------------|
+| T       | K           |
 | logg    | log(cm*s-2) |
 | feh     | dex         |
 | dT      | K           |

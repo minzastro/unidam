@@ -8,23 +8,23 @@ What you will need to run UniDAM (apart from UniDAM itself) is the following:
 
 2) Data file. Should be a fits or votable with the following columns:
 
-id           A     a unique ID
-T             E      K
-logg          E      cm s-2
-feh           E      dex
-dT            E      K
-dlogg         E      cm s-2
-dfeh          E      dex
-Jmag          E      mag
-e_Jmag        E      mag
-Hmag          E      mag
-e_Hmag        E      mag
-Kmag          E      mag
-e_Kmag        E      mag
-W1mag         E      mag
-e_W1mag       E      mag
-W2mag         E      mag
-e_W2mag       E      mag
+| T       | K           |
+|---------|-------------|
+| logg    | log(cm*s-2) |
+| feh     | dex         |
+| dT      | K           |
+| dlogg   | log(cm*s-2) |
+| dfeh    | dex         |
+| Jmag    | mag         |
+| e_Jmag  | mag         |
+| Hmag    | mag         |
+| e_Hmag  | mag         |
+| Kmag    | mag         |
+| e_Kmag  | mag         |
+| W1mag   | mag         |
+| e_W1mag | mag         |
+| W2mag   | mag         |
+| e_W2mag | mag         |
 
 Magnitudes are for 2MASS and AllWISE. If you do not want to bother with AllWISE, you can leave the corresponding columns empty. Other columns are possible, but they will be ignored.
 

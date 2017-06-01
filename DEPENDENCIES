@@ -7,5 +7,5 @@ astropy
 scipy
 argparse
 healpy
-skewnorm_boost
+skewnorm_boost from https://github.com/minzastro/skewnorm_boost
 colorlog

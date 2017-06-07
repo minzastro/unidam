@@ -2,9 +2,25 @@ import numpy as np
 import warnings
 from scipy.stats import norm, truncnorm, t
 from scipy.optimize import curve_fit
-import skewnorm_boost
 from pprint import pprint
 
+try:
+    import skewnorm_boost
+    def skew_gauss(x, mu, sigma, alpha):
+        """
+        Skewed Gaussian distribution.
+        """
+        sn = skewnorm_boost.SkewNorm(mu, sigma, alpha)
+        result = np.array([sn.pdf(xx) for xx in x])
+        return result
+except ImportError:
+    from unidam.utils.skewnorm_local import skewnorm_local as sn
+    def skew_gauss(x, mu, sigma, alpha):
+        """
+        Skewed Gaussian distribution.
+        """
+        result = np.array([sn.pdf(xx) for xx in x])
+        return result
 
 def skew_gauss(x, mu, sigma, alpha):
     """

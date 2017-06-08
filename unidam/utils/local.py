@@ -35,3 +35,12 @@ def get_param(fit, par):
     else:
         raise ValueError('Unknown fit type: %s' % fit)
     return None
+
+
+def vargauss_filter1d(xinput, yinput, sigma):
+    output = np.zeros_like(xinput)
+    for ind, item in enumerate(yinput):
+        local_sigma = (sigma * xinput[ind])**2
+        add = np.exp(-0.5 * (xinput - xinput[ind])**2 / local_sigma)
+        output += item * add / add.sum()
+    return output

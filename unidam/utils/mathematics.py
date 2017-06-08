@@ -11,6 +11,15 @@ INV_SQRT2Pi = 1./np.sqrt(2.*np.pi)
 MAD_COEFF = 1.4836
 
 
+def to_borders(arr, min_value, max_value):
+    """
+    Force array to range between minimum and maximum values.
+    """
+    arr[np.where(arr < min_value)[0]] = min_value
+    arr[np.where(arr > max_value)[0]] = max_value
+    return arr
+
+
 def to_str(arr):
     """
     Convert array to string nicely.
@@ -52,9 +61,9 @@ def bin_estimate(data, weights=None):
         weights = np.ones_line(data)
     q25 = quantile(data, weights, 0.25)
     q75 = quantile(data, weights, 0.75)
-    h = 2. * (q75 - q25) * np.power(len(weights), -1./3.)
-    if h > 0:
-        return h, int((data.max() - data.min()) / h) + 1
+    width = 2. * (q75 - q25) * np.power(len(weights), -1./3.)
+    if width > 0:
+        return width, int((data.max() - data.min()) / width) + 1
     else:
         return 0., len(data)
 

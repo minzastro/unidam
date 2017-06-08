@@ -2,8 +2,6 @@ import numpy as np
 import warnings
 from scipy.stats import norm, truncnorm, t
 from scipy.optimize import curve_fit
-from pprint import pprint
-
 try:
     import skewnorm_boost
     def skew_gauss(x, mu, sigma, alpha):
@@ -21,15 +19,6 @@ except ImportError:
         """
         result = np.array([sn.pdf(xx) for xx in x])
         return result
-
-def skew_gauss(x, mu, sigma, alpha):
-    """
-    Skewed Gaussian distribution.
-    """
-    sn = skewnorm_boost.SkewNorm(mu, sigma, alpha)
-    result = np.array([sn.pdf(xx) for xx in x])
-    return result
-
 
 def t_student(x, mu, sigma, df):
     return t.pdf(x, df, mu, sigma)
@@ -221,10 +210,6 @@ def find_best_fit(xdata, ydata, mu0, sigma0):
                 ['P'] + do_fit(xdata, ydata, t_student, (mu0, sigma0, nu0)),
                 ['L'] + do_fit_exponent(xdata, ydata, (mu0, sigma0),
                                         lower, upper), ]
-    #pprint(fits)
-    #print mu0, sigma0
-    #pprint(xdata)
-    #pprint(ydata)
     if abs(fits[2][1][2]) > 50:
         # Exclude extremly skewed shapes.
         # They are to be replaced by truncated gaussians.

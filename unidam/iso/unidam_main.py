@@ -13,11 +13,12 @@ from scipy.ndimage.filters import gaussian_filter1d
 from unidam.iso.model_fitter import model_fitter as mf # pylint: disable=no-member
 from unidam.iso.histogram_splitter import histogram_splitter
 from unidam.utils.fit import find_best_fit
-from unidam.utils.mathematics import wstatistics, quantile, bin_estimate
+from unidam.utils.mathematics import wstatistics, quantile, bin_estimate, to_borders
 from unidam.utils.confidence import find_confidence, ONE_SIGMA, THREE_SIGMA
 from unidam.utils.stats import to_bins
 from unidam.iso import extinction
 from unidam.utils import constants
+from unidam.utils.local import vargauss_filter1d
 
 
 class NumpyAwareJSONEncoder(json.JSONEncoder):
@@ -53,7 +54,7 @@ class UniDAMTool(object):
 
     MIN_USPDF_WEIGHT = 0.03
 
-    MINIMUM_STEP = {'age': 0.04,
+    MINIMUM_STEP = {'age': 0.02,
                     'distance_modulus': 0.04,
                     'distance': 100.,
                     'extinction': 0.001,
@@ -71,6 +72,7 @@ class UniDAMTool(object):
         self.id_column = None
         self.dump_pdf = False
         self.dump_pdf_file = None
+        self.config = {}
         config = ConfigParser()
         config.optionxform = str
         if config_filename is None:
@@ -88,13 +90,13 @@ class UniDAMTool(object):
         # This array contains indices in the model table for input data
         self.model_columns = OrderedDict(config.items('model_columns'))
         self.default_bands = OrderedDict(config.items('band_columns'))
-        self.max_param_err = config.getint('general', 'max_param_err')
         self.w_column = len(self.fitted_columns) + 2
         self.dump_pdf = config.getboolean('general', 'dump_pdf')
         if self.dump_pdf:
             self.total_age_pdf = np.zeros(constants.AGE_RANGE.shape[0])
             self.total_2d_pdf = np.zeros((constants.DM_RANGE.shape[0],
                                           constants.AGE_RANGE.shape[0]))
+        mf.max_param_err = config.getint('general', 'max_param_err')
         mf.use_model_weight = True
         mf.use_magnitude_probability = \
             config.getboolean('general', 'use_magnitudes')
@@ -103,21 +105,25 @@ class UniDAMTool(object):
             'general', 'allow_negative_extinction')
         mf.distance_known = config.getboolean('general', 'distance_known')
         if mf.distance_known:
-            self.distance_column = config.get('distance', 'column')
-            self.distance_err_column = config.get('distance', 'err_column')
-            extinction.init()
+            self._update_config('distance', config)
         mf.parallax_known = config.getboolean('general', 'parallax_known')
         if mf.parallax_known:
-            self.parallax_column = config.get('parallax', 'column')
-            self.parallax_err_column = config.get('parallax', 'err_column')
+            self._update_config('parallax', config)
+            self._update_config('extinction', config)
             self.MINIMUM_STEP['distance_modulus'] = 1e-5
-            extinction.init()
         self.RK = {band: constants.R_FACTORS[band] / constants.R_FACTORS['K']
                    for band in constants.R_FACTORS.keys()}
         self.RV = {band: constants.R_FACTORS[band] / constants.R_FACTORS['V']
                    for band in constants.R_FACTORS.keys()}
         self._load_models(os.path.join(os.path.dirname(__file__),
                                        config.get('general', 'model_file')))
+
+    def _update_config(self, name, config):
+        """
+        Transfer data from config file to local object config...
+        """
+        self.config[name] = config.get(name, 'column')
+        self.config['%s_err' % name] = config.get(name, 'err_column')
 
     def _load_models(self, filename):
         """
@@ -151,17 +157,19 @@ class UniDAMTool(object):
         # Set maximum differnce between model and observation in units
         # of the observational error.
         self.dump = dump
-        mf.max_param_err = self.max_param_err
         self.prepare_row(row)
         if np.isnan(self.param).any():
-            print 'No spectral params'
-            return None
+            print('No spectral params for %s' % row[self.id_column])
+            return {'id': row[self.id_column],
+                    'error': 'No spectral params'}
         if np.any(self.param < -100.) or np.any(self.param_err < 0):
-            print 'No spectral params or invalid params'
-            return None
+            print('No spectral params or invalid params for %s' % row[self.id_column])
+            return {'id': row[self.id_column],
+                    'error': 'No spectral params or invalid params'}
         if len(self.mag) == 0:
-            print 'No photometry'
-            return None
+            print('No photometry for %s' % row[self.id_column])
+            return {'id': row[self.id_column],
+                    'error': 'No photometry'}
         # This matrix is used to solve linear equations system for
         # distance modulus and extinctions.
         self.mag_matrix = [[np.sum(self.mag_err),
@@ -180,20 +188,21 @@ class UniDAMTool(object):
         mf.alloc_settings(self.abs_mag, self.model_columns.values(),
                           self.fitted_columns.values()[:-4])
         if mf.distance_known:
-            mf.distance_modulus = row[self.distance_column]
-            mf.distance_modulus_err = row[self.distance_err_column]
-            mf.extinction = extinction.get_schlegel_Av(row['l'], row['b'])
+            mf.distance_modulus = row[self.config['distance']]
+            mf.distance_modulus_err = row[self.config['distance_err']]
+            mf.extinction = row[self.config['extinction']]
         if mf.parallax_known:
-            mf.parallax = row[self.parallax_column]
-            mf.parallax_error = row[self.parallax_err_column]
-            mf.extinction = extinction.get_schlegel_Av(row['l'], row['b'])
-            mf.extinction_error = 10. * mf.extinction
+            mf.parallax = row[self.config['parallax']]
+            mf.parallax_error = row[self.config['parallax_err']]
+            mf.extinction = row[self.config['extinction']]
+            mf.extinction_error = row[self.config['extinction_err']]
         # HERE THINGS HAPPEN!
         m_count = mf.find_best()
         # Now deal with the result:
         if m_count == 0:
-            print 'No model fitting'
-            return []
+            print('No model fitting for %s' % row[self.id_column])
+            return {'id': row[self.id_column],
+                    'error': 'No model fitting'}
         model_params = mf.model_params[:m_count]
         stages = np.asarray(model_params[:, 0], dtype=int)
         mode_weight = np.zeros(3)
@@ -203,13 +212,15 @@ class UniDAMTool(object):
         total_mode_weight = np.sum(mode_weight)
         if total_mode_weight == 0.:
             # Does this ever work?
-            print 'No model fitting (test)'
-            return []
+            print('No model fitting (test) for %s' % row[self.id_column])
+            return {'id': row[self.id_column],
+                    'error': 'No model fitting'}
         try:
             mode_weight = mode_weight / total_mode_weight
         except ZeroDivisionError:
-            print 'No model fitting'
-            return []
+            print('Zero weight for %s' % row[self.id_column])
+            return {'id': row[self.id_column],
+                    'error': 'Zero weight'}
         # Setting best stage
         result = []
         for istage, stage in enumerate([1, 2, 3]):
@@ -366,6 +377,8 @@ class UniDAMTool(object):
             elif name == 'distance':
                 # Fixed number of bins for distances
                 bins = np.linspace(m_min * 0.95, m_max, 50)
+            elif name == 'age':
+                bins = np.arange(6.6, 10.14, 0.02)
             else:
                 h, _ = bin_estimate(mode_data, weights)
                 h = max(h, self.MINIMUM_STEP[name])
@@ -379,7 +392,10 @@ class UniDAMTool(object):
             median = quantile(mode_data, weights)
             avg, err, _, _ = wstatistics(mode_data, weights, 2)
             if smooth is not None:
-                err = np.sqrt(err**2 + smooth**2)
+                if name in ['distance_modulus', 'extinction']:
+                    err = np.sqrt(err**2 + smooth**2)
+                else:
+                    err = np.sqrt(err**2 + (avg * smooth)**2)
             if err == 0.:
                 # This is done for the case of very low weights...
                 # I guess it should be done otherwise, but...
@@ -394,43 +410,54 @@ class UniDAMTool(object):
                                     weights=weights,
                                     normed=True)[0]
                 if smooth is not None:
-                    hist = gaussian_filter1d(
-                        hist,
-                        smooth / (bins[1] - bins[0]),
-                        mode='constant')
+                    if name in ['distance_modulus', 'extinction']:
+                        hist = gaussian_filter1d(
+                            hist,
+                            smooth / (bins[1] - bins[0]),
+                            mode='constant')
+                    else:
+                        hist = vargauss_filter1d(bin_centers, hist, smooth)
                 mode = bin_centers[np.argmax(hist)]
                 fit, par, kl_div = find_best_fit(bin_centers, hist, avg, err)
                 if kl_div > 1e9:
                     # No fit converged.
                     fit = 'E'
         result_par = np.array(list(par) + [0] * 5)[:5]
-        if fit in 'GSTPL':
-            result_par[1] = abs(result_par[1])
-        elif fit != 'L':
-            # If we have no fit, than report just mean and err.
-            result_par = np.array([avg, err, 0., 0., 0.])
+        if fit in 'TL':
+            result_par[2] = mode_data.min()
+            result_par[3] = mode_data.max()
+        elif fit == 'P':
+            result_par[3] = mode_data.min()
+            result_par[4] = mode_data.max()
+
         result = {'_mean': avg,
                   '_err': err,
                   '_mode': mode,
                   '_median': median,
                   '_fit': fit,
-                  '_par': result_par}
+                  }
         if self.dump and bin_centers is not None:
             result.update({'_bins_debug': bin_centers,
                            '_hist_debug': hist})
         if fit in 'GSTPL':
+            result_par[1] = abs(result_par[1])
             # Find confidence intervals.
-            sigma1 = find_confidence(bin_centers, hist, ONE_SIGMA)
-            sigma3 = find_confidence(bin_centers, hist, THREE_SIGMA)
+            sigma1 = to_borders(find_confidence(bin_centers, hist, ONE_SIGMA),
+                                mode_data.min(), mode_data.max())
+            sigma3 = to_borders(find_confidence(bin_centers, hist, THREE_SIGMA),
+                                mode_data.min(), mode_data.max())
             result.update({'_low_1sigma': sigma1[0],
                            '_up_1sigma': sigma1[1],
                            '_low_3sigma': sigma3[0],
                            '_up_3sigma': sigma3[1]})
         else:
+            # If we have no fit, than report just mean and err.
+            result_par = np.array([avg, err, 0., 0., 0.])
             result.update({'_low_1sigma': result_par[0] - result_par[1],
                            '_up_1sigma': result_par[0] + result_par[1],
                            '_low_3sigma': result_par[0] - result_par[1] * 3,
                            '_up_3sigma': result_par[0] + result_par[1] * 3})
+        result['_par'] = result_par
         if name in ['extinction', 'distance', 'parallax']:
             # These values cannot be negative...
             if result['_low_1sigma'] < 0.:
@@ -497,8 +524,12 @@ class UniDAMTool(object):
             smooth_distance = np.sqrt(1. / self.mag_err[0])
             smooth_extinction = np.sqrt(1. / self.mag_err[0]) / self.Rk[0]
         if mf.parallax_known:
-            smooth_distance = np.sqrt(1./(1./smooth_distance**2 +
-                                          0.212 * mf.parallax**2 / mf.parallax_error**2))
+            hess_matrix = np.copy(self.mag_matrix)
+            hess_matrix[0, 0] += 0.212 * mf.parallax**2 / mf.parallax_error**2
+            # Magic constant 0.212 is (0.2 log(10))**2
+            covariance = np.linalg.inv(hess_matrix)
+            smooth_distance = np.sqrt(covariance[0, 0])
+            smooth_extinction = np.sqrt(covariance[1, 1])
             dof += 2
         new_result = {'stage': xdata[0, 0],
                       'uspdf_points': xdata.shape[0],
@@ -515,6 +546,10 @@ class UniDAMTool(object):
                 smooth = smooth_distance
             elif key == 'extinction':
                 smooth = smooth_extinction
+            elif key == 'distance':
+                smooth = 2. * np.log(10.) * smooth_distance
+            elif key == 'parallax':
+                smooth = 0.02 * np.log(10.) * smooth_distance
             else:
                 smooth = None
             new_result.update(self.process_mode(key,

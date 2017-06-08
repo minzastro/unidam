@@ -14,7 +14,7 @@ import os
 import sys
 import traceback
 import warnings
-from astropy.table import Table
+from astropy.table import Table, Column
 from unidam.iso.model_fitter import model_fitter as mf
 from unidam.iso.unidam_main import UniDAMTool, get_table
 from unidam.utils.constants import AGE_RANGE
@@ -28,7 +28,7 @@ parser.add_argument('-i', '--input', type=str, default=None,
 parser.add_argument('-o', '--output', type=str, default='result.fits',
                     help='Output file name')
 parser.add_argument('-c', '--config', type=str,
-                    default=None,
+                    required=True, default=None,
                     help='Config file name')
 parser.add_argument('--id', type=str, default=None,
                     help='Run for just a single ID')
@@ -48,6 +48,9 @@ de = UniDAMTool(config_filename=args.config)
 de.id_column = 'id'
 idtype = data.columns[de.id_column].dtype
 final = get_table(idtype, de.fitted_columns)
+unfitted = Table()
+unfitted['id'] = Column(dtype=idtype)
+unfitted['error'] = Column(dtype='S100')
 
 mf.use_model_weight = True
 
@@ -55,7 +58,9 @@ if args.id is not None:
     ids = (args.id).split(',')
     if idtype.kind == 'S':
         len_id = idtype.itemsize
-    mask = [j in np.asarray(ids, dtype=idtype) for j in data[de.id_column]]
+        mask = [j.strip() in np.asarray(ids, dtype=idtype) for j in data[de.id_column]]
+    else:
+        mask = [j in np.asarray(ids, dtype=idtype) for j in data[de.id_column]]
     data = data[np.where(mask)]
     print data
 
@@ -73,21 +78,26 @@ if args.parallel:
         try:
             des = deepcopy(de)
             tbl = deepcopy(final)
+            bad = deepcopy(unfitted)
             for xrow in patch:
                 result = des.get_estimates(xrow, dump=False)
                 if result is None:
                     continue
+                elif isinstance(result, dict):
+                    bad.add_row(result)
+                    continue
                 for new_row in result:
                     tbl.add_row(new_row)
-            return tbl, des
+            return tbl, des, bad
         except:
             # Put all exception text into an exception and raise that
             raise Exception("".join(traceback.format_exception(*sys.exc_info())))
 
     pool = mp.Pool(pool_size)
     pool_result = pool.map(run_single, np.array_split(data, pool_size))
-    pool_result, des = zip(*pool_result)
+    pool_result, des, bads = zip(*pool_result)
     final = vstack(pool_result)
+    unfitted = vstack(bads)
     if de.dump_pdf:
         out_age_pdf = np.zeros_like(des[0].total_age_pdf)
         out_2d_pdf = np.zeros_like(des[0].total_2d_pdf)
@@ -106,6 +116,9 @@ else:
         result = de.get_estimates(xrow, dump=args.dump_results)
         if result is None:
             continue
+        elif isinstance(result, dict):
+            unfitted.add_row(result)
+            continue
         for new_row in result:
             for k in new_row.keys():
                 if k not in final.colnames:
@@ -121,3 +134,6 @@ if os.path.exists(args.output):
     os.remove(args.output)
 final.meta = vars(args)
 final.write(args.output, format='fits')
+if os.path.exists('%s_unfitted.fits' % args.output):
+    os.remove('%s_unfitted.fits' % args.output)
+unfitted.write('%s_unfitted.fits' % args.output)

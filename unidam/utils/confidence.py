@@ -40,4 +40,4 @@ def find_confidence(xdata, ydata, frac):
                 x_right = xdata[pos_right] + \
                     xstep * (frac1 - part1) / ydata[pos_right + 1]
                 part1 = frac1
-    return x_left, x_right
+    return np.array([x_left, x_right])

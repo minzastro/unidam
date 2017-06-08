@@ -31,6 +31,7 @@ integer, save :: distance_prior = 1
 
 contains
 
+!! ALLOCATION ROUTINES
 subroutine alloc_settings(na, xabs_mag, nmod, xmodel_columns, nf, xfitted_columns)
   integer, intent(in) :: na, nmod, nf
   integer, intent(in) :: xabs_mag(na), xmodel_columns(nmod), xfitted_columns(nf)
@@ -100,28 +101,14 @@ subroutine alloc_mag(n, xmag, xmag_err, xCk) ! Load data for magnitudes
     Ck = xCk
 end subroutine alloc_mag
 
+
+!! Other routines
 subroutine solve_for_distance(vector, solution)
   real, intent(in) :: vector(2)
   real, intent(out) :: solution(2)
     solution(1) = (vector(1)*matrix0(2,2) - vector(2)*matrix0(1,2))*matrix_det
     solution(2) = -(vector(1)*matrix0(1,2) - vector(2)*matrix0(1,1))*matrix_det
 end subroutine solve_for_distance
-
-real function mu_d_derivative(ext, mu, vector)
-  ! Derivative of L_sed with mu_d, with volume correction AND known parallax
-  real, intent(in) :: ext, mu
-  real, intent(in) :: vector(2)
-  real pi
-    pi = 10**(-0.2 * mu - 1.)
-    mu_d_derivative = -0.2 * log(10.) * (2. + pi * (pi - parallax) / parallax_error**2) - vector(1) + sum((ext * Ck + mu) * mag_err)
-end function mu_d_derivative
-
-real function extinction_derivative(ext, mu, vector)
-  real, intent(in) :: ext, mu
-  real, intent(in) :: vector(2)
-    extinction_derivative = (ext - extinction) / extinction_error**2 - &
-      vector(2) + sum((ext * Ck + mu) * Ck * mag_err)
-end function extinction_derivative
 
 real function mu_d_function(mud, vector)
   real, intent(in) :: mud
@@ -132,7 +119,6 @@ real function mu_d_function(mud, vector)
                    sum(Ck * mud * mag_err)) / (sum(Ck * Ck * mag_err) + (1/extinction_error**2))
       mu_d_function = 0.2 * log(10.) * (2. + pi * (pi - parallax)/ parallax_error**2) + &
         vector(1) - sum((Ak_local * Ck + mud) * mag_err)
-      !write(97, *) mud, pi, Ak_local, extinction
 end function mu_d_function
 
 subroutine solve_for_distance_with_parallax(vector, solution)
@@ -142,8 +128,6 @@ subroutine solve_for_distance_with_parallax(vector, solution)
   real Ak_new, mu
   real mu_1, mu_2, fun_1, fun_2
   integer iterations
-    !write(99, *) solution, parallax, parallax_error, extinction, extinction_error
-    !write(98, *) '---------------'
     mu_1 = -5 * (1. + log10(parallax + 10.*parallax_error))
     if (parallax .gt. 10.*parallax_error) then
         mu_2 = -5 * (1. + log10(parallax - 10.*parallax_error))
@@ -151,7 +135,6 @@ subroutine solve_for_distance_with_parallax(vector, solution)
         mu_2 = -5 * (1. + log10(parallax)) - 5.
     endif
     iterations = 0
-    !write(98, *) mu_1, mu_2
     do while ((iterations .le. 100) .and. (abs(mu_2 - mu_1) .gt. 1e-6))
       fun_1 = mu_d_function(mu_1, vector)
       fun_2 = mu_d_function(mu_2, vector)
@@ -166,7 +149,6 @@ subroutine solve_for_distance_with_parallax(vector, solution)
       else
         mu_2 = mu_1 + 2.5*(mu_1 - mu_2)
       endif
-      !write(98, *) mu_1, mu_2, fun_1, fun_2
       iterations = iterations + 1
     enddo
     solution(1) = mu_1
@@ -274,7 +256,7 @@ subroutine find_best(m_count)
         model_params(m_count, off+4) = 1./model_params(m_count, off+3)
         ! Unweighted isochrone likelihood
         if (parallax_known) then
-            L_sed = L_sed +  & !0.5 * (mu_d(2) - extinction)**2 / (extinction_error**2) + &
+            L_sed = L_sed + 0.5 * (mu_d(2) - extinction)**2 / (extinction_error**2) + &
                             0.5 * (model_params(m_count, off+4) - parallax)**2 / (parallax_error**2)
         endif
         model_params(m_count, prob) = L_model
@@ -313,7 +295,6 @@ subroutine find_best(m_count)
       endif
     enddo
     m_count = m_count - 1
-    !model_params(m_count+1:, prob+2) = -1
 end subroutine find_best
 
 end module model_fitter

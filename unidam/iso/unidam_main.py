@@ -36,6 +36,10 @@ class NumpyAwareJSONEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
+def get_splitted(config, name):
+    return config.get('general', name).split(',')
+
+
 class UniDAMTool(object):
     """
     Estimating distance and extinction
@@ -72,24 +76,24 @@ class UniDAMTool(object):
         self.id_column = None
         self.dump_pdf = False
         self.dump_pdf_file = None
+        self.model_column_names = None
         self.config = {}
         config = ConfigParser()
         config.optionxform = str
         if config_filename is None:
             config_filename = os.path.join(os.path.dirname(__file__),
                                            'unidam.conf')
+        if not os.path.exists(config_filename):
+            raise Exception('Config file %s not found' % config_filename)
         config.read(config_filename)
-        self.fitted_columns = OrderedDict(config.items('fitted_columns'))
         for key, value in self.DEFAULTS.iteritems():
             if not config.has_option('general', key):
                 config.set('general', key, str(value))
-        for key in self.fitted_columns.keys():
-            self.fitted_columns[key] = int(self.fitted_columns[key])
-        for item in config.get('general', 'derived_columns').split(','):
-            self.fitted_columns[item] = -1
+        self.fitted_columns = get_splitted(config, 'fitted_columns')
+        self.fitted_columns.extend(get_splitted(config, 'derived_columns'))
         # This array contains indices in the model table for input data
-        self.model_columns = OrderedDict(config.items('model_columns'))
-        self.default_bands = OrderedDict(config.items('band_columns'))
+        self.model_columns = get_splitted(config, 'model_columns')
+        self.default_bands = get_splitted(config, 'band_columns')
         self.w_column = len(self.fitted_columns) + 2
         self.dump_pdf = config.getboolean('general', 'dump_pdf')
         if self.dump_pdf:
@@ -118,6 +122,20 @@ class UniDAMTool(object):
         self._load_models(os.path.join(os.path.dirname(__file__),
                                        config.get('general', 'model_file')))
 
+    def _names_to_indices(self, columns):
+        """
+        Convert a list of column names to name-index dictionary.
+        """
+        if self.model_column_names is None:
+            raise Exception('Cannot convert names to indices - model file not loaded yet')
+        result = []
+        for name in columns:
+            if name in self.model_column_names:
+                result.append((name, self.model_column_names.index(name)))
+            else:
+                result.append((name, -1))
+        return OrderedDict(result)
+
     def _update_config(self, name, config):
         """
         Transfer data from config file to local object config...
@@ -139,6 +157,10 @@ class UniDAMTool(object):
             self.model_data = np.asarray(table.data.tolist(), dtype=float)
             np.save(filename + '.npy', self.model_data)
         self.model_column_names = [column.name for column in table.columns]
+        self.fitted_columns = self._names_to_indices(self.fitted_columns)
+        self.model_columns = self._names_to_indices(self.model_columns)
+        self.default_bands = self._names_to_indices(self.default_bands)
+
         mf.alloc_models(self.model_data)
 
     def _apply_mask(self, mask):
@@ -185,8 +207,9 @@ class UniDAMTool(object):
             mf.matrix_det = 0.  # Will be unsused anyway
         mf.alloc_mag(self.mag, self.mag_err, self.Rk)
         mf.alloc_param(self.param, self.param_err)
+        fitted = [item for item in self.fitted_columns.values() if item > 0 ]
         mf.alloc_settings(self.abs_mag, self.model_columns.values(),
-                          self.fitted_columns.values()[:-4])
+                          fitted)
         if mf.distance_known:
             mf.distance_modulus = row[self.config['distance']]
             mf.distance_modulus_err = row[self.config['distance_err']]

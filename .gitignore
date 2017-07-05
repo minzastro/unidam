@@ -1,6 +1,7 @@
 *.pyc
 *.pdf
 *.fits
+*.npy
 *.so
 *.png
 .kdev4

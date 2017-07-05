@@ -390,7 +390,7 @@ class UniDAMTool(object):
                     bin_count = int((m_max - m_min) / h) + 1
                 bins = np.linspace(m_min, m_max, bin_count)
             median = quantile(mode_data, weights)
-            avg, err, _, _ = wstatistics(mode_data, weights, 2)
+            avg, err = wstatistics(mode_data, weights, 2)
             if smooth is not None:
                 if name in ['distance_modulus', 'extinction']:
                     err = np.sqrt(err**2 + smooth**2)

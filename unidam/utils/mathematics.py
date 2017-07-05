@@ -84,13 +84,9 @@ def wstatistics(data, weights, moments=4):
     """
     mean = np.average(data, weights=weights)
     std = np.sqrt(np.average((data - mean)**2, weights=weights))
+    result = [mean, std]
     if moments >= 3:
-        skew = np.average(((data - mean)/std)**3, weights=weights)
+        result.append(np.average(((data - mean)/std)**3, weights=weights))
         if moments >= 4:
-            kurt = np.average(((data - mean)/std)**4, weights=weights)
-        else:
-            kurt = None
-    else:
-        skew = None
-        kurt = None
-    return mean, std, skew, kurt
+            result.append(np.average(((data - mean)/std)**4, weights=weights))
+    return result

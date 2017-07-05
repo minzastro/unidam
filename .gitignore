@@ -1,0 +1,7 @@
+*.pyc
+*.pdf
+*.fits
+*.so
+*.png
+.kdev4
+*.kdev4

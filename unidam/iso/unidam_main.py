@@ -94,6 +94,10 @@ class UniDAMTool(object):
         # This array contains indices in the model table for input data
         self.model_columns = get_splitted(config, 'model_columns')
         self.default_bands = get_splitted(config, 'band_columns')
+        # This is the index of column with output model weights.
+        # In the output table (mf.model_data) there are columns for
+        # fitted columns + columns for L_iso, L_sed and
+        # at the very end - weight column
         self.w_column = len(self.fitted_columns) + 2
         self.dump_pdf = config.getboolean('general', 'dump_pdf')
         if self.dump_pdf:
@@ -150,17 +154,16 @@ class UniDAMTool(object):
         """
         if not os.path.exists(filename):
             raise Exception('Model file %s is not found' % filename)
-        table = fits.open(filename)[1]
+        table = fits.open(filename)
         if os.path.exists(filename + '.npy'):
             self.model_data = np.load(filename + '.npy')
         else:
-            self.model_data = np.asarray(table.data.tolist(), dtype=float)
+            self.model_data = np.asarray(table[1].data.tolist(), dtype=float)
             np.save(filename + '.npy', self.model_data)
-        self.model_column_names = [column.name for column in table.columns]
+        self.model_column_names = [column.name for column in table[1].columns]
         self.fitted_columns = self._names_to_indices(self.fitted_columns)
         self.model_columns = self._names_to_indices(self.model_columns)
         self.default_bands = self._names_to_indices(self.default_bands)
-
         mf.alloc_models(self.model_data)
 
     def _apply_mask(self, mask):

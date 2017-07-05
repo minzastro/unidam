@@ -210,7 +210,7 @@ class UniDAMTool(object):
             mf.matrix_det = 0.  # Will be unsused anyway
         mf.alloc_mag(self.mag, self.mag_err, self.Rk)
         mf.alloc_param(self.param, self.param_err)
-        fitted = [item for item in self.fitted_columns.values() if item > 0 ]
+        fitted = [item for item in self.fitted_columns.values() if item >= 0 ]
         mf.alloc_settings(self.abs_mag, self.model_columns.values(),
                           fitted)
         if mf.distance_known:
@@ -231,8 +231,9 @@ class UniDAMTool(object):
                     'error': 'No model fitting'}
         model_params = mf.model_params[:m_count]
         stages = np.asarray(model_params[:, 0], dtype=int)
-        mode_weight = np.zeros(3)
-        for istage, stage in enumerate([1, 2, 3]):
+        uniq_stages = np.unique(stages)
+        mode_weight = np.zeros(len(uniq_stages))
+        for istage, stage in enumerate(uniq_stages):
             mode_weight[istage] = np.sum(model_params[stages == stage,
                                                       self.w_column])
         total_mode_weight = np.sum(mode_weight)
@@ -249,7 +250,7 @@ class UniDAMTool(object):
                     'error': 'Zero weight'}
         # Setting best stage
         result = []
-        for istage, stage in enumerate([1, 2, 3]):
+        for istage, stage in enumerate(uniq_stages):
             if mode_weight[istage] < self.MIN_USPDF_WEIGHT:
                 # Ignore stages with a small weight
                 continue

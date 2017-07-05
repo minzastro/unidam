@@ -195,8 +195,15 @@ def find_best_fit(xdata, ydata, mu0, sigma0):
         Proxy for truncated Gaussian.
         """
         return truncate_gauss(x, p[0], p[1], lower, upper)
-    xstep = xdata[1] - xdata[0]
-    xxdata = np.arange(xdata[0] - xstep*10, xdata[-1] + xstep*10.5, xstep)
+    xstep_left = xdata[1] - xdata[0]
+    xstep_right = xdata[-1] - xdata[-2]
+    xxdata = np.concatenate((
+            np.arange(xdata[0] - xstep_left * 10,
+                      xdata[0] - xstep_left * 0.5, xstep_left),
+            xdata,
+            np.arange(xdata[-1] + xstep_right,
+                      xdata[-1] + xstep_right * 10.5, xstep_right)
+        ))
     yydata = np.zeros_like(xxdata)
     yydata[10:-10] = ydata
     # Empirical first estimate for the Student's parameter:

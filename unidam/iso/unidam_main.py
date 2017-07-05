@@ -160,6 +160,7 @@ class UniDAMTool(object):
         else:
             self.model_data = np.asarray(table[1].data.tolist(), dtype=float)
             np.save(filename + '.npy', self.model_data)
+        self.age_grid = np.asarray(table[2].data, dtype=float)
         self.model_column_names = [column.name for column in table[1].columns]
         self.fitted_columns = self._names_to_indices(self.fitted_columns)
         self.model_columns = self._names_to_indices(self.model_columns)
@@ -405,7 +406,11 @@ class UniDAMTool(object):
                 # Fixed number of bins for distances
                 bins = np.linspace(m_min * 0.95, m_max, 50)
             elif name == 'age':
-                bins = np.arange(6.6, 10.14, 0.02)
+                #bins = np.arange(6.6, 10.14, 0.02)
+                bins = np.empty(len(self.age_grid) + 1)
+                bins[1:-1] = 0.5*(self.age_grid[1:] + self.age_grid[:-1])
+                bins[0] = self.age_grid[0] - 0.5*(self.age_grid[1] - self.age_grid[0])
+                bins[-1] = self.age_grid[-1] + 0.5*(self.age_grid[-1] - self.age_grid[-2])
             else:
                 h, _ = bin_estimate(mode_data, weights)
                 h = max(h, self.MINIMUM_STEP[name])
@@ -432,10 +437,13 @@ class UniDAMTool(object):
                 mode = avg
                 fit, par, kl_div = 'N', [], 1e10
             else:
-                bin_centers = 0.5 * (bins[1:] + bins[:-1])
+                if name == 'age':
+                    bin_centers = self.age_grid
+                else:
+                    bin_centers = 0.5 * (bins[1:] + bins[:-1])
                 hist = np.histogram(mode_data, bins,
-                                    weights=weights,
-                                    normed=True)[0]
+                                    weights=weights)[0]
+                hist = hist * (len(bins) - 1)/ (hist.sum() * (bins[-1] - bins[0]))
                 if smooth is not None:
                     if name in ['distance_modulus', 'extinction']:
                         hist = gaussian_filter1d(

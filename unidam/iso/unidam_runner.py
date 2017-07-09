@@ -31,13 +31,13 @@ parser.add_argument('-c', '--config', type=str,
                     required=True, default=None,
                     help='Config file name')
 parser.add_argument('--id', type=str, default=None,
-                    help='Run for just a single ID')
+                    help='Run for just a single ID or a comma-separated list of IDs')
 parser.add_argument('-d', '--dump-results', action="store_true",
                     default=False,
                     help='Dump model data for each star')
 parser.add_argument('-p', '--parallel', action="store_true",
                     default=False,
-                    help='Run in parallel')
+                    help='Run in parallel (uses OMP_NUM_THREADS if given, otherwise 2 threads)')
 args = parser.parse_args()
 
 with warnings.catch_warnings():
@@ -109,7 +109,13 @@ if args.parallel:
                    np.vstack((AGE_RANGE, out_age_pdf)).T)
         np.savetxt('%s_2d_pdf.dat' % output_prefix, out_2d_pdf)
 else:
-    mf.debug = args.dump_results
+    if args.id is not None:
+        # Debug mode is allowed only when a list of IDs is given.
+        # This is done to prevent dumping HUGE amounts of data
+        # if a debug-mode is switched on for a complete survey.
+        mf.debug = args.dump_results
+    else:
+        mf.debug = False
     i = 0
     for xrow in data:
         print xrow[de.id_column]

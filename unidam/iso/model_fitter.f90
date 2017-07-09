@@ -1,14 +1,28 @@
 module model_fitter
-! Fortran module of the SAGE_GAP distance estimation tool
+! Fortran module of the UniDAM.
+! Equations referred to are from Mints and Hekker (2017).
 implicit none
 
+! All models
 real, allocatable :: models(:, :)
+! This array contains a mask for models within 4 sigmas
 logical, allocatable :: mask_models(:)
 real, allocatable :: model_params(:, :)
+! Parameters for a current star (T, logg, feh + uncertainty)
 real, allocatable :: param(:), param_err(:)
-real, allocatable :: mag(:), mag_err(:), Ck(:)
-integer, allocatable :: abs_mag(:), model_columns(:), fitted_columns(:)
+! Visible magnitudes for a current star
+real, allocatable :: mag(:), mag_err(:)
+! Extinction coefficiens (see eq 8 in Paper 1)
+real, allocatable :: Ck(:)
+! Indices of absolute magnitude columns in models array 
+integer, allocatable :: abs_mag(:)
+! Indices of "observed" columns in models array (default: T, logg, feh) 
+integer, allocatable :: model_columns(:)
+! Indices of columns for derived values in models array 
+integer, allocatable :: fitted_columns(:)
+! Number of columns in the models array
 integer, save :: model_column_count
+! Matrix for eq 15 and inverse of its determinant
 real, save :: matrix0(2, 2), matrix_det
 real, save :: max_param_err = 4.
 logical, save :: use_model_weight = .true.
@@ -122,6 +136,10 @@ real function mu_d_function(mud, vector)
 end function mu_d_function
 
 subroutine solve_for_distance_with_parallax(vector, solution)
+  ! Solving the system of equations for distance modulus
+  ! and extinction for the case with parallax and extinction priors.
+  ! This is probably highly inefficient, an improvement
+  ! is needed here.
   real, intent(in) :: vector(2)
   real, intent(inout) :: solution(2)
   real Ak_old, mu_old
@@ -223,6 +241,8 @@ subroutine find_best(m_count)
               call solve_for_distance_with_parallax(vector, mu_d)
               L_sed = 0.5*sum((mag - mu_d(1) - models(i, abs_mag) - Ck * mu_d(2))**2 * mag_err)
           else
+              ! If there are 2 or more bands observed
+              ! then we can solve eq. 15
               bic1 = 2.*L_sednoext + log(float(size(mag_err)))
               call solve_for_distance(vector, mu_d)
               if (distance_known) then
@@ -269,11 +289,11 @@ subroutine find_best(m_count)
            p = exp(-L_model)
         endif
         if (isnan(L_sed).or.(p .le. epsilon(1.))) then
-		  if (debug) then
-		    write(68, *) models(i, model_columns), models(i, abs_mag), &
-			             'Mag:', mag - models(i, abs_mag), &
-			             'Fit:', model_params(m_count, 1:off+4), L_model, L_sed, p
-		  endif
+          if (debug) then
+            write(68, *) models(i, model_columns), models(i, abs_mag), &
+                         'Mag:', mag - models(i, abs_mag), &
+                         'Fit:', model_params(m_count, 1:off+4), L_model, L_sed, p
+          endif
           mask_models(i) = .false.
           cycle
         endif

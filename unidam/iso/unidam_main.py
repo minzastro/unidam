@@ -155,9 +155,11 @@ class UniDAMTool(object):
         if not os.path.exists(filename):
             raise Exception('Model file %s is not found' % filename)
         table = fits.open(filename)
+        self.model_dataa = None
         if os.path.exists(filename + '.npy'):
-            self.model_data = np.load(filename + '.npy')
-        else:
+            if os.path.getmtime(filename + '.npy') > os.path.getmtime(filename):
+                self.model_data = np.load(filename + '.npy')
+        if self.model_data is None:
             self.model_data = np.asarray(table[1].data.tolist(), dtype=float)
             np.save(filename + '.npy', self.model_data)
         self.age_grid = np.asarray(table[2].data, dtype=float)

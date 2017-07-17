@@ -155,7 +155,7 @@ class UniDAMTool(object):
         if not os.path.exists(filename):
             raise Exception('Model file %s is not found' % filename)
         table = fits.open(filename)
-        self.model_dataa = None
+        self.model_data = None
         if os.path.exists(filename + '.npy'):
             if os.path.getmtime(filename + '.npy') > os.path.getmtime(filename):
                 self.model_data = np.load(filename + '.npy')

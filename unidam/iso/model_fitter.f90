@@ -288,7 +288,7 @@ subroutine find_best(m_count)
         else
            p = exp(-L_model)
         endif
-        if (isnan(L_sed).or.(p .le. epsilon(1.))) then
+        if (isnan(L_sed).or.(p .le. tiny(1.))) then
           if (debug) then
             write(68, *) models(i, model_columns), models(i, abs_mag), &
                          'Mag:', mag - models(i, abs_mag), &

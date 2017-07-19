@@ -65,4 +65,4 @@ def kl_divergence(a, b, lowlim=1e-10):
 
 
 def kl_divergence_symmetric(a, b, lowlim=1e-10):
-    return kl_divergence(a, b, lowlim) + kl_divergence(b ,a, lowlim)
+    return kl_divergence(a, b, lowlim) + kl_divergence(b, a, lowlim)

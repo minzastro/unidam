@@ -270,10 +270,6 @@ class UniDAMTool(object):
         weights = [arow['uspdf_weight'] for arow in result]
         for ibest, best in enumerate(np.argsort(weights)[::-1]):
             result[best]['uspdf_priority'] = ibest
-            if ibest == 0:
-                # We store best-model data for highest-priority USPDF
-                best_model = result[best]['best_model']
-            del result[best]['best_model']
         for item in result:
             item.update({'total_uspdfs': len(result),
                          'id': row[self.id_column]})
@@ -281,7 +277,6 @@ class UniDAMTool(object):
         result.sort(key=lambda x: x['uspdf_priority'])
         result = self.assign_quality(result)
         if self.dump:
-            self.dump_plot(best_model, str(row[self.id_column]).strip())
             self.dump_results(model_params, row, result)
             # Delete *debug* keys in the results
             # They are not to be exported.
@@ -360,17 +355,22 @@ class UniDAMTool(object):
         """
         if param not in self.fitted_columns:
             raise NotImplementedError('%s has to be fitted' % param)
-
-        dm_column = self.fitted_columns.keys().index(param)
-        xbins = np.arange(stage_data[:, dm_column].min(),
-                          stage_data[:, dm_column].max() + 0.2, 0.2)
-        histogram = np.histogram(stage_data[:, dm_column],
+        split_column = self.fitted_columns.keys().index(param)
+        if param == 'age':
+            step = self.MINIMUM_STEP[param]
+        else:
+            step, _ = bin_estimate(stage_data[:, split_column],
+                                   stage_data[:, self.w_column])
+            step = max(step, self.MINIMUM_STEP[param])
+        xbins = np.arange(stage_data[:, split_column].min() - step * 0.5,
+                          stage_data[:, split_column].max() + step * 1.5, step)
+        histogram = np.histogram(stage_data[:, split_column],
                                  bins=xbins,
                                  weights=stage_data[:, self.w_column])
         for split in histogram_splitter(histogram[0], histogram[1],
-                                        use_spikes=False):
-            yield stage_data[stage_data[:, dm_column] <= split]
-            stage_data = stage_data[stage_data[:, dm_column] > split]
+                                        use_spikes=False, dip_depth=0.33):
+            yield stage_data[stage_data[:, split_column] <= split]
+            stage_data = stage_data[stage_data[:, split_column] > split]
         # Do not forget to yield last item
         yield stage_data
 
@@ -380,8 +380,8 @@ class UniDAMTool(object):
         separated by valleys.
         """
         for part in self.split_mass(stage_data):
-            for part2 in self.split_other(part, 'distance_modulus'):
-                for part3 in self.split_other(part2, 'age'):
+            #for part2 in self.split_other(part, 'distance_modulus'):
+                for part3 in self.split_other(part, 'age'):
                     yield part3
 
     def process_mode(self, name, mode_data, weights, smooth=None):
@@ -408,12 +408,13 @@ class UniDAMTool(object):
                 # Fixed number of bins for distances
                 bins = np.linspace(m_min * 0.95, m_max, 50)
             elif name == 'age':
-                #bins = np.arange(6.6, 10.14, 0.02)
                 bins = np.empty(len(self.age_grid) + 1)
                 bins[1:-1] = 0.5*(self.age_grid[1:] + self.age_grid[:-1])
                 bins[0] = self.age_grid[0] - 0.5*(self.age_grid[1] - self.age_grid[0])
                 bins[-1] = self.age_grid[-1] + 0.5*(self.age_grid[-1] - self.age_grid[-2])
             else:
+                if name == 'extinction':
+                    m_min = mode_data[mode_data > 0].min()
                 h, _ = bin_estimate(mode_data, weights)
                 h = max(h, self.MINIMUM_STEP[name])
                 if h < np.finfo(np.float32).eps:
@@ -473,11 +474,14 @@ class UniDAMTool(object):
                   '_median': median,
                   '_fit': fit,
                   }
+        if name == 'extinction':
+            result['_zero'] = mode_data[mode_data < m_min].shape[0] / float(mode_data.shape[0])
         if self.dump and bin_centers is not None:
             result.update({'_bins_debug': bin_centers,
                            '_hist_debug': hist})
-        if fit in 'GSTPL':
-            result_par[1] = abs(result_par[1])
+        if fit in 'GSTPLF':
+            if fit != 'F':
+                result_par[1] = abs(result_par[1])
             # Find confidence intervals.
             sigma1 = to_borders(find_confidence(bin_centers, hist, ONE_SIGMA),
                                 mode_data.min(), mode_data.max())
@@ -573,7 +577,6 @@ class UniDAMTool(object):
                       'uspdf_weight': mode_weight,
                       'p_best': 1. - chi2.cdf(2. * l_best, dof + 3),
                       'p_sed': 1. - chi2.cdf(2. * l_sed, dof),
-                      'best_model': xdata[best_model],
                       'distance_modulus_smooth': smooth_distance,
                       'extinction_smooth': smooth_extinction}
         for ikey, key in enumerate(self.fitted_columns.keys()):
@@ -666,71 +669,11 @@ class UniDAMTool(object):
                 result['quality'] = 'N'
         return results
 
-    def dump_plot(self, best_data, iid):
-        """
-        Plot SED of the best-fitting model.
-        This is for debugging purposes only.
-        """
-        prob_offset = len(self.fitted_columns)
-        x_values = range(len(self.mag))
-        # SED corrected for extinctnion
-        y1_values = self.mag - best_data[prob_offset - 4] - \
-            self.Rk * best_data[prob_offset - 3]
-        y1_err = np.sqrt(1. / self.mag_err)
-        # Looking for the best-fitting model SED.
-        stage_index = self.model_column_names.index('stage')
-        a_model = mf.models[np.asarray(mf.models[:, stage_index], dtype=int) ==
-                            int(best_data[0])]
-        a_model = a_model[
-            a_model[:, self.fitted_columns['age']] == best_data[1]]
-        a_model = a_model[
-            a_model[:, self.fitted_columns['mass']] == best_data[2]]
-        y2_values = a_model[0, self.abs_mag]
-        plt.errorbar(x_values, y1_values, yerr=y1_err, label="Source")
-        plt.plot(x_values, y2_values, 'o-', label="Model")
-        plt.xlim(-0.1, x_values[-1] + 0.1)
-        plt.legend()
-        plt.savefig('dump/dump_%s_sed.png' % iid)
-        plt.clf()
-
     def dump_results(self, model_params, row, result):
         """
         Save results into a dat/json files.
         """
-        mass = model_params[:, self.fitted_columns.keys().index('mass')]
-        plt.clf()
-        bins = np.logspace(np.log10(mass.min() * 0.9),
-                           np.log10(mass.max() + 0.5), 20)
-        if bins[1] - bins[0] < 0.05:
-            # There is a low-mass-end
-            spacing = np.log10(bins[0] + 0.051) - np.log10(bins[0])
-            steps = int((np.log10(bins[-1]) - np.log10(bins[0])) /
-                        spacing) + 1
-            if steps > 10:
-                bins = np.logspace(np.log10(bins[0]),
-                                   np.log10(bins[-1]),
-                                   steps)
-            else:
-                bins = np.arange(bins[0], bins[-1], 0.075)
-        plt.hist(mass, bins, normed=1,
-                 weights=model_params[:, self.w_column],
-                 facecolor='green', alpha=0.2)
-        fsum = np.zeros(len(bins))
-        for arow in result:
-            uspdf = arow['uspdf_weight'] * \
-                norm.pdf(bins, loc=arow['mass_mean'], scale=arow['mass_err'])
-            plt.plot(bins, uspdf, '-o',
-                     label='%s=%s' % (arow['uspdf_priority'],
-                                      arow['stage']))
-            fsum = fsum + uspdf
-        plt.plot(bins, fsum, '-', label='TOtal')
-        fsum = np.zeros(len(bins))
-        plt.xlim(mass.min() * 0.9, mass.max() + 0.5)
-        plt.xscale('log')
-        plt.legend()
         idstr = str(row[self.id_column]).strip()
-        plt.savefig('dump/dump_%s_mass.png' % idstr)
-        plt.clf()
         dump_array = range(self.w_column + 1)
         header = '%s L_iso L_sed p_w' % ' '.join(self.fitted_columns.keys())
         np.savetxt('dump/dump_%s.dat' % idstr,
@@ -795,6 +738,7 @@ def get_table(idtype=str, fitted_columns={}):
         final['%s_mad' % key] = float_column()
     final['distance_modulus_smooth'] = float_column(unit='mag')
     final['extinction_smooth'] = float_column(unit='mag')
+    final['extinction_zero'] = float_column(unit='fraction')
     return final
 
 # DO NOT MAKE main() function here: will cause problems for parallel...

@@ -16,7 +16,7 @@ def get_ydata(name, row, binx):
     """
     Prepare Y-data from PDF fitting function.
     """
-    if row['%s_fit' % name] in 'GSTPL':
+    if row['%s_fit' % name] in 'GSTPLF':
         func, par = get_param(row['%s_fit' % name], row['%s_par' % name])
         ydata = func.pdf(binx, *par)
     else:
@@ -28,7 +28,9 @@ def get_ydata(name, row, binx):
 plt.rc('font', family='serif')
 UNITS = {'mass': 'Mass ($M_{sun}$)', 'age': 'log(age) (log years)',
          'distance_modulus': 'Distance modulus (mag)',
-         'distance': 'Distance (pc)'}
+         'distance': 'Distance (pc)',
+         'parallax': 'Parallax (mas)',
+         'extinction': 'Extinction (mag)'}
 
 
 def plot_pdf(xid, fits, name, data, column, ax, each=False,
@@ -64,11 +66,13 @@ def plot_pdf(xid, fits, name, data, column, ax, each=False,
         labels.append('Stage %s' % label[stage])
         ns.append(n)
     for row in fits:
+        if row['%s_fit' % name] == 'N':
+            continue
         stage = row['stage']
-        ax.plot(row['%s_bins_debug' % name],
-                np.array(row['%s_hist_debug' % name]) * row['uspdf_weight'],
-                label='Stage %s' % label[stage],
-                linewidth=1., color=lcolors[stage])
+        l = ax.plot(row['%s_bins_debug' % name],
+                    np.array(row['%s_hist_debug' % name]) * row['uspdf_weight'],
+                    label='Stage %s' % label[stage],
+                    linewidth=1., color=lcolors[stage])
         lines.append(l[0])
         labels.append('Stage %s' % label[stage])
         ns.append(n)
@@ -84,15 +88,17 @@ def plot_pdf(xid, fits, name, data, column, ax, each=False,
             if correlations and (name == 'mass' or name == 'age') \
                 and 'dm_age_intercept' in row:
                 if name == 'mass':
-                    binx2 = (np.log10(binx) - row['dm_mass_intercept'])/row['dm_mass_slope']
+                    binx2 = (np.log10(binx) - row['dm_mass_intercept']) / \
+                        row['dm_mass_slope']
                 else:
                     binx2 = (binx - row['dm_age_intercept'])/row['dm_age_slope']
                 ydata2 = get_ydata('distance_modulus', row, binx2)
                 if ydata2 is None:
                     continue
                 ydata2 = ydata2 * row['uspdf_weight'] * ns[0].sum() / np.sum(ydata2)
-                ax.plot(binx, ydata2, color=lcolors[row['stage']], linestyle='--',
-                        label='Fit %s' % label[row['stage']], linewidth=1.5)
+                ax.plot(binx, ydata2, color=lcolors[row['stage']],
+                        linestyle='--', linewidth=1.5,
+                        label='Fit %s' % label[row['stage']])
     if total:
         line = plt.step(binx, n_total, label='Total', where='mid',
                         color='black', linestyle='--')
@@ -141,6 +147,7 @@ def plot_pdf(xid, fits, name, data, column, ax, each=False,
         plt.clf()
     return lines, labels
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="""
     Tool to plot PDFs from debug data.
@@ -149,6 +156,8 @@ if __name__ == '__main__':
                         help='Comma-separated list of IDs')
     parser.add_argument('--title', type=str, default=None,
                         help='Title to add at the top')
+    parser.add_argument('-w', '--what', type=str, default='AMD',
+                        help='What to plot')
     parser.add_argument('-g', '--grid', action="store_true",
                         default=False,
                         help='Place all plots into one file')
@@ -163,9 +172,16 @@ if __name__ == '__main__':
                         help='Do not plot fits')
     parser.add_argument('-c', '--correlations', action="store_true",
                         default=False,
-                        help='Add fits for ages and masses derived from relation to distance')
+                        help='Add fits for ages and masses derived '
+                             'from relation to distance')
     args = parser.parse_args()
 
+    PLOTS = {'A': ('age', 1),
+             'M': ('mass', 2),
+             'D': ('distance_modulus', 3),
+             'E': ('extinction', 4),
+             'd': ('distance', 5),
+             'P': ('parallax', 6)}
     if args.grid:
         fig = plt.figure(figsize=(6, 10))
         plt.rcParams.update({'font.size': 18})
@@ -175,17 +191,16 @@ if __name__ == '__main__':
     for xid in args.input.split(','):
         data = np.loadtxt('dump/dump_%s.dat' % xid)
         fits = json.load(open('dump/dump_%s.json' % xid, 'r'))
-        for ii, item in enumerate([('age', 1), ('mass', 2),
-                                   ('distance_modulus', 3)]):
+        for ii, item in enumerate([PLOTS[name] for name in args.what]):
             if args.grid:
                 ax = plt.subplot(3, 1, ii + 1)
             else:
                 ax = plt.subplot(111)
             lines, labels = plot_pdf(xid, fits, item[0], data, item[1], ax,
-                                     not args.grid, args.total, args.correlations,
+                                     not args.grid, args.total,
+                                     args.correlations,
                                      args.legend, not args.nofit)
         if args.grid:
-            print labels
             if args.legend:
                 leg = plt.figlegend(lines, labels, loc=(0.05, 0.01),
                                     ncol=4, frameon=False)

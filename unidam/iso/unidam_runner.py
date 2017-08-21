@@ -23,7 +23,7 @@ np.set_printoptions(linewidth=200)
 parser = argparse.ArgumentParser(description="""
 Tool to estimate distances to stars.
 """, formatter_class=argparse.RawDescriptionHelpFormatter)
-parser.add_argument('-i', '--input', type=str, default=None, 
+parser.add_argument('-i', '--input', type=str, default=None,
                     required=True, help='Input file name')
 parser.add_argument('-o', '--output', type=str, default='result.fits',
                     help='Output file name')
@@ -119,6 +119,8 @@ else:
     i = 0
     for xrow in data:
         print xrow[de.id_column]
+        #with warnings.catch_warnings():
+        #    warnings.filterwarnings("error")
         result = de.get_estimates(xrow, dump=args.dump_results)
         if result is None:
             continue

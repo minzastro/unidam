@@ -1,9 +1,14 @@
 import numpy as np
 from scipy.stats import norm, truncnorm
 from unidam.skewnorm_boosted import skewnorm_boosted as skewnorm
-from unidam.utils.trunc_t import trunc_t
+from unidam.studentst_boosted import studentst_boosted as studentst
 from unidam.utils.trunc_revexpon import trunc_revexpon
+from unidam.utils.fit import trunc_line
 
+class TruncLine(object):
+    @classmethod
+    def pdf(cls, *par):
+        return trunc_line(*par)
 
 def get_param(fit, par):
     """
@@ -11,6 +16,8 @@ def get_param(fit, par):
     """
     if fit == 'S':
         return skewnorm, [par[2], par[0], par[1]]
+    elif fit == 'F':
+        return TruncLine, par[:-1]
     elif fit == 'G':
         return norm, [par[0], par[1]]
     elif fit == 'T':
@@ -19,10 +26,7 @@ def get_param(fit, par):
         beta = (par[3] - par[0]) / par[1]
         return truncnorm, [alpha, beta, par[0], sigma]
     elif fit == 'P':
-        sigma = np.abs(par[1])
-        alpha = (par[3] - par[0]) / par[1]
-        beta = (par[4] - par[0]) / par[1]
-        return trunc_t, [par[2], alpha, beta, par[0], sigma]
+        return studentst, par
     elif fit == 'L':
         sigma = np.abs(par[1])
         if par[0] < par[2]:

@@ -110,7 +110,7 @@ def kl_divergence(x, func, par, y):
     Symmetric Kullback-Leibler divergence value.
     """
     values = func(x, *par)
-    mask = np.logical_and(values > 1e-50, y > 0)
+    mask = np.logical_and(values > 1e-50, y > 1e-50)
     if np.any(mask) and mask.sum() > 2:
         return np.sum(values[mask]*np.log(values[mask]/y[mask])) + \
                np.sum(y[mask]*np.log(y[mask]/values[mask]))

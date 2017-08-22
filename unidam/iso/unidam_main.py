@@ -414,7 +414,7 @@ class UniDAMTool(object):
                 bins[-1] = self.age_grid[-1] + 0.5*(self.age_grid[-1] - self.age_grid[-2])
             else:
                 if name == 'extinction':
-                    m_min = mode_data[mode_data > 0].min()
+                    m_min = mode_data[mode_data > 0].min() / 2.
                 h, _ = bin_estimate(mode_data, weights)
                 h = max(h, self.MINIMUM_STEP[name])
                 if h < np.finfo(np.float32).eps:
@@ -444,8 +444,8 @@ class UniDAMTool(object):
                     bin_centers = self.age_grid
                 else:
                     bin_centers = 0.5 * (bins[1:] + bins[:-1])
-                hist = np.histogram(mode_data, bins,
-                                    weights=weights)[0]
+                hist = np.histogram(mode_data[mode_data > bins[0]], bins,
+                                    weights=weights[mode_data > bins[0]])[0]
                 hist = hist * (len(bins) - 1)/ (hist.sum() * (bins[-1] - bins[0]))
                 if smooth is not None:
                     if name in ['distance_modulus', 'extinction']:

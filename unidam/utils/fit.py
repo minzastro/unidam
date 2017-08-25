@@ -269,12 +269,8 @@ def find_best_fit(xdata, ydata, mu0, sigma0):
         if (fits['L'][0][0] < upper and fits['L'][0][0]> lower) or fits['L'][1] > 1e9:
             fits['G'] = do_fit(xxdata, yydata, gauss, (mu0, sigma0))
             param = estimate_skew(mu0, sigma0, xxdata[np.argmax(yydata)])
-            #print(xxdata, yydata, skew_gauss, [mu0, sigma0, param])
             fits['S'] = do_fit(xxdata, yydata, skew_gauss,
                                [mu0, sigma0, param])
-                               #bounds=((xdata.min(), -np.inf, -50., 0.),
-                               #        (xdata.max(), np.inf, 50., np.inf)),
-                               #use_trf=False)
             if fits['G'][0][0] < lower or fits['G'][0][0] > upper:
                 fits['G'][1] = 3e11
             if np.abs(fits['S'][0][2]) > 50:

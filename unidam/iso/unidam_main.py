@@ -408,10 +408,7 @@ class UniDAMTool(object):
                 # Fixed number of bins for distances
                 bins = np.linspace(m_min * 0.95, m_max, 50)
             elif name == 'age':
-                bins = np.empty(len(self.age_grid) + 1)
-                bins[1:-1] = 0.5*(self.age_grid[1:] + self.age_grid[:-1])
-                bins[0] = self.age_grid[0] - 0.5*(self.age_grid[1] - self.age_grid[0])
-                bins[-1] = self.age_grid[-1] + 0.5*(self.age_grid[-1] - self.age_grid[-2])
+                bins = to_bins(self.age_grid)
             else:
                 if name == 'extinction':
                     m_min = mode_data[mode_data > 0].min() / 2.

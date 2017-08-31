@@ -14,7 +14,7 @@ What you will need to run UniDAM (apart from UniDAM itself) is the following:
 | logg    | log(cm*s-2) |
 | feh     | dex         |
 | dT      | K           |
-| dlogg   | log(cm*s-2) |
+| dlogg   | $log(cm*s^{-2})$ |
 | dfeh    | dex         |
 | Jmag    | mag         |
 | e_Jmag  | mag         |

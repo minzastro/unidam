@@ -48,7 +48,7 @@ class UniDAMTool(object):
     DEFAULTS = {
         'distance_prior': '1',
         'use_magnitudes': '1',
-        'derived_columns': 'distance_modulus,extinction,distance,parallax',
+        'fitted_columns': 'stage,age,mass,distance_modulus,extinction,distance,parallax',
         'max_param_err': '4',
         'distance_known': '0',
         'parallax_known': '0',
@@ -90,7 +90,6 @@ class UniDAMTool(object):
             if not config.has_option('general', key):
                 config.set('general', key, str(value))
         self.fitted_columns = get_splitted(config, 'fitted_columns')
-        self.fitted_columns.extend(get_splitted(config, 'derived_columns'))
         # This array contains indices in the model table for input data
         self.model_columns = get_splitted(config, 'model_columns')
         self.default_bands = get_splitted(config, 'band_columns')
@@ -111,6 +110,11 @@ class UniDAMTool(object):
         mf.distance_prior = config.getint('general', 'distance_prior')
         mf.allow_negative_extinction = config.getboolean(
             'general', 'allow_negative_extinction')
+        for icolumn, column in enumerate(['distance_modulus',
+                                          'extinction',
+                                          'distance',
+                                          'parallax']):
+            mf.special_columns[icolumn] = column in self.fitted_columns
         mf.distance_known = config.getboolean('general', 'distance_known')
         if mf.distance_known:
             self._update_config('distance', config)
@@ -317,8 +321,9 @@ class UniDAMTool(object):
         Special treatment for masses - PDF can contain a sharp peak.
         """
         if 'mass' not in self.fitted_columns:
-            raise NotImplementedError('mass has to be fitted')
-
+            yield stage_data
+            return
+            #raise NotImplementedError('mass has to be fitted')
         mass_column = self.fitted_columns.keys().index('mass')
         # Make a histogram in log-masses
         xbins = np.logspace(np.log10(stage_data[:, mass_column].min() * 0.9),
@@ -349,26 +354,29 @@ class UniDAMTool(object):
         # Do not forget to yield last item
         yield stage_data
 
-    def split_other(self, stage_data, param='distance_modulus'):
+    def split_other(self, stage_data, param='distance_modulus', dip=0.33):
         """
         Split in "other" params (distance modulus or age).
         """
         if param not in self.fitted_columns:
-            raise NotImplementedError('%s has to be fitted' % param)
+            yield stage_data
+            return
+            #raise NotImplementedError('%s has to be fitted' % param)
         split_column = self.fitted_columns.keys().index(param)
         if param == 'age':
-            step = self.MINIMUM_STEP[param]
+            #step = self.MINIMUM_STEP[param]
+            xbins = to_bins(self.age_grid)
         else:
             step, _ = bin_estimate(stage_data[:, split_column],
                                    stage_data[:, self.w_column])
             step = max(step, self.MINIMUM_STEP[param])
-        xbins = np.arange(stage_data[:, split_column].min() - step * 0.5,
-                          stage_data[:, split_column].max() + step * 1.5, step)
+            xbins = np.arange(stage_data[:, split_column].min() - step * 0.5,
+                              stage_data[:, split_column].max() + step * 1.5, step)
         histogram = np.histogram(stage_data[:, split_column],
                                  bins=xbins,
                                  weights=stage_data[:, self.w_column])
         for split in histogram_splitter(histogram[0], histogram[1],
-                                        use_spikes=False, dip_depth=0.33):
+                                        use_spikes=False, dip_depth=dip):
             yield stage_data[stage_data[:, split_column] <= split]
             stage_data = stage_data[stage_data[:, split_column] > split]
         # Do not forget to yield last item
@@ -443,7 +451,7 @@ class UniDAMTool(object):
                     bin_centers = 0.5 * (bins[1:] + bins[:-1])
                 hist = np.histogram(mode_data[mode_data > bins[0]], bins,
                                     weights=weights[mode_data > bins[0]])[0]
-                hist = hist * (len(bins) - 1)/ (hist.sum() * (bins[-1] - bins[0]))
+                hist = hist / (hist.sum() * (bins[1:] - bins[:-1]))
                 if smooth is not None:
                     if name in ['distance_modulus', 'extinction']:
                         hist = gaussian_filter1d(
@@ -453,10 +461,14 @@ class UniDAMTool(object):
                     else:
                         hist = vargauss_filter1d(bin_centers, hist, smooth)
                 mode = bin_centers[np.argmax(hist)]
-                fit, par, kl_div = find_best_fit(bin_centers, hist, avg, err)
-                if kl_div > 1e9:
-                    # No fit converged.
-                    fit = 'E'
+                if np.sum(hist > 0) < 4:
+                    mode = avg
+                    fit, par, kl_div = 'N', [], 7e10
+                else:
+                    fit, par, kl_div = find_best_fit(bin_centers, hist, avg, err)
+                    if kl_div > 1e9:
+                        # No fit converged.
+                        fit = 'E'
         result_par = np.array(list(par) + [0] * 5)[:5]
         if fit in 'TL':
             result_par[2] = mode_data.min()
@@ -573,15 +585,16 @@ class UniDAMTool(object):
                       'uspdf_points': xdata.shape[0],
                       'uspdf_weight': mode_weight,
                       'p_best': 1. - chi2.cdf(2. * l_best, dof + 3),
-                      'p_sed': 1. - chi2.cdf(2. * l_sed, dof),
-                      'distance_modulus_smooth': smooth_distance,
-                      'extinction_smooth': smooth_extinction}
+                      'p_sed': 1. - chi2.cdf(2. * l_sed, dof)
+                      }
         for ikey, key in enumerate(self.fitted_columns.keys()):
             if key == 'stage':
                 continue
             elif key == 'distance_modulus':
+                new_result['distance_modulus_smooth'] = smooth_distance,
                 smooth = smooth_distance
             elif key == 'extinction':
+                new_result['extinction_smooth'] = smooth_extinction,
                 smooth = smooth_extinction
             elif key == 'distance':
                 smooth = 2. * np.log(10.) * smooth_distance
@@ -594,25 +607,32 @@ class UniDAMTool(object):
                                                 xdata[:, self.w_column],
                                                 smooth))
         if self.dump_pdf:
-            age_col = self.fitted_columns.keys().index('age')
-            dm_col = self.fitted_columns.keys().index('distance_modulus')
-            age_histogram = np.histogram(xdata[:, age_col],
-                                         to_bins(constants.AGE_RANGE),
-                                         weights=xdata[:, self.w_column],
-                                         normed=True)[0]
-            two_histogram = np.histogram2d(xdata[:, dm_col],
-                                           xdata[:, age_col],
-                                           (to_bins(constants.DM_RANGE),
-                                            to_bins(constants.AGE_RANGE)),
-                                           weights=xdata[:, self.w_column],
-                                           normed=True)[0]
-            age_histogram = age_histogram * mode_weight / age_histogram.sum()
-            two_histogram = two_histogram * mode_weight / two_histogram.sum()
-            age_histogram[np.isnan(age_histogram)] = 0.
-            two_histogram[np.isnan(two_histogram)] = 0.
-            self.total_age_pdf += age_histogram
-            self.total_2d_pdf += two_histogram
-        if len(xdata) > 3 and not mf.distance_known:
+            if 'age' in self.fitted_columns:
+                age_col = self.fitted_columns.keys().index('age')
+                age_histogram = np.histogram(xdata[:, age_col],
+                                             to_bins(constants.AGE_RANGE),
+                                             weights=xdata[:, self.w_column],
+                                             normed=True)[0]
+                age_histogram = age_histogram * mode_weight / \
+                    age_histogram.sum()
+                age_histogram[np.isnan(age_histogram)] = 0.
+                self.total_age_pdf += age_histogram
+                if 'distance_modulus' in self.fitted_columns:
+                    dm_col = self.fitted_columns.keys()\
+                        .index('distance_modulus')
+                    two_histogram = np.histogram2d(
+                        xdata[:, dm_col],
+                        xdata[:, age_col],
+                        (to_bins(constants.DM_RANGE),
+                         to_bins(constants.AGE_RANGE)),
+                        weights=xdata[:, self.w_column],
+                        normed=True)[0]
+                    two_histogram = two_histogram * mode_weight \
+                        / two_histogram.sum()
+                    two_histogram[np.isnan(two_histogram)] = 0.
+                    self.total_2d_pdf += two_histogram
+        if len(xdata) > 3 and not mf.distance_known and \
+            'distance_modulus' in self.fitted_columns:
             if 'age' in self.fitted_columns:
                 new_result.update(self.get_correlations('distance_modulus',
                                                         'age', xdata))
@@ -728,14 +748,16 @@ def get_table(idtype=str, fitted_columns={}):
             final['%s_mean' % key].meta['ucd'] = ucd[key]
             final['%s_fit' % key] = Column(dtype='S1')
             final['%s_par' % key] = Column(dtype=float, shape=(5))
-    for key in ['dm_age', 'age_dm', 'dm_mass']:
-        final['%s_slope' % key] = float_column()
-        final['%s_intercept' % key] = float_column()
-        final['%s_scatter' % key] = float_column()
-        final['%s_mad' % key] = float_column()
-    final['distance_modulus_smooth'] = float_column(unit='mag')
-    final['extinction_smooth'] = float_column(unit='mag')
-    final['extinction_zero'] = float_column(unit='fraction')
+    if 'distance_modulus' in fitted_columns:
+        for key in ['dm_age', 'age_dm', 'dm_mass']:
+            final['%s_slope' % key] = float_column()
+            final['%s_intercept' % key] = float_column()
+            final['%s_scatter' % key] = float_column()
+            final['%s_mad' % key] = float_column()
+        final['distance_modulus_smooth'] = float_column(unit='mag')
+    if 'extinction' in fitted_columns:
+        final['extinction_smooth'] = float_column(unit='mag')
+        final['extinction_zero'] = float_column(unit='fraction')
     return final
 
 # DO NOT MAKE main() function here: will cause problems for parallel...

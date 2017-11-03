@@ -5,10 +5,10 @@ def to_bins(arr):
     """
     Convert bin centers to bin boundaries.
     """
-    step = 0.5*(arr[1] - arr[0])
     result = np.zeros(len(arr)+1)
-    result[:-1] = arr - step
-    result[-1] = arr[-1] + step
+    result[1:-1] = 0.5 * (arr[1:] + arr[:-1])
+    result[0] = arr[0] - 0.5*(arr[1] - arr[0])
+    result[-1] = arr[-1] + 0.5*(arr[-1] - arr[-2])
     return result
 
 

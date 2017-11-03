@@ -5,11 +5,10 @@
 # Copyright (c) 2012 Oliver M. Haynold
 # All rights reserved.
 
-import math
 import numpy as np
 from scipy.stats import t, rv_continuous
 
-## Skew-normal distribution
+
 class trunc_t_gen(rv_continuous):
     """
     The truncated Student's t-distribution.
@@ -35,5 +34,6 @@ class trunc_t_gen(rv_continuous):
         result[mask] = (t._cdf(x[mask], df) - self._na) / self._delta
         result[x > b] = 1.
         return result
+
 
 trunc_t = trunc_t_gen(name="trunc_t", shapes='df,a,b')

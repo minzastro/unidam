@@ -29,6 +29,10 @@ logical, save :: use_model_weight = .true.
 logical, save :: use_magnitude_probability = .true.
 logical, save :: debug = .false.
 logical, save :: allow_negative_extinction = .false.
+! Special array of flags.
+! Indicates if the following columns are needed:
+! Distance modulus, extinction, distance, parallax
+logical, save :: special_columns(4)
 
 ! Flag indicating if the distance is known
 logical, save :: distance_known = .false.
@@ -181,7 +185,7 @@ subroutine find_best(m_count)
   integer, intent(out) :: m_count
   integer i
   integer off, prob
-  real p
+  real p, distance
   real L_model, L_sed, L_sednoext, bic2, bic1
   real vector(2)
   real mu_d(2), mu_d_noext ! (mu_d, Av)
@@ -193,8 +197,7 @@ subroutine find_best(m_count)
     do i = 1, size(param)
       mask_models = mask_models .and. (abs(models(:, model_columns(i)) - param(i)).le.(max_param_err*param_err(i)))
     enddo
-    off = size(fitted_columns)
-    prob = off + 5 ! Here probablities start
+    prob = size(fitted_columns) + count(special_columns) + 1 ! Here probablities start
     m_count = 1
     if (distance_known) then
       matrix0(1, 1) = matrix0(1, 1) + 1./distance_modulus_err**2
@@ -267,17 +270,33 @@ subroutine find_best(m_count)
           mu_d(1) = mu_d_noext
           mu_d(2) = 0d0
         endif
+        off = size(fitted_columns)
         model_params(m_count, :off) = models(i, fitted_columns)
-        ! Distance modulus + Extinction
-        model_params(m_count, off+1:off+2) = mu_d
+        ! Distance modulus
+        if (special_columns(1)) then
+            off = off + 1
+            model_params(m_count, off) = mu_d(1)
+        endif
+        ! Extinction
+        if (special_columns(2)) then
+            off = off + 1
+            model_params(m_count, off) = mu_d(2)
+        endif
         ! Distance
-        model_params(m_count, off+3) = 10**(mu_d(1)*0.2 + 1)
+        distance = 10**(mu_d(1)*0.2 + 1)
+        if (special_columns(3)) then
+            off = off + 1
+            model_params(m_count, off) = distance
+        endif
         ! Parallax
-        model_params(m_count, off+4) = 1./model_params(m_count, off+3)
+        if (special_columns(4)) then
+            off = off + 1
+            model_params(m_count, off) = 1. / distance
+        endif
         ! Unweighted isochrone likelihood
         if (parallax_known) then
             L_sed = L_sed + 0.5 * (mu_d(2) - extinction)**2 / (extinction_error**2) + &
-                            0.5 * (model_params(m_count, off+4) - parallax)**2 / (parallax_error**2)
+                            0.5 * (1. / distance - parallax)**2 / (parallax_error**2)
         endif
         model_params(m_count, prob) = L_model
         ! SED likelihood
@@ -292,7 +311,7 @@ subroutine find_best(m_count)
           if (debug) then
             write(68, *) models(i, model_columns), models(i, abs_mag), &
                          'Mag:', mag - models(i, abs_mag), &
-                         'Fit:', model_params(m_count, 1:off+4), L_model, L_sed, p
+                         'Fit:', model_params(m_count, 1:off), L_model, L_sed, p
           endif
           mask_models(i) = .false.
           cycle
@@ -303,7 +322,7 @@ subroutine find_best(m_count)
         endif
         if ((distance_prior.eq.1).or.(parallax_known)) then
            ! Multiply by d^2 - volume factor correction
-           p = p * model_params(m_count, off+3) * model_params(m_count, off+3)
+           p = p * distance * distance
         endif
         model_params(m_count, prob+2) = p
         if (debug) then

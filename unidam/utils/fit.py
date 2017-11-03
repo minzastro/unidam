@@ -38,6 +38,7 @@ def trunc_line(xin, val, val2, lower, upper):
     result = np.zeros_like(xin)
     mask = (xin >= lower) * (xin <= upper)
     result[mask] = np.polyval([val, val2], xin[mask])
+    result[result < 0.] = 0.
     return result
 
 
@@ -226,7 +227,7 @@ def estimate_skew(mu0, sigma0, mode0):
         return np.sign(s_est)
 
 
-def find_best_fit(xdata, ydata, mu0, sigma0):
+def find_best_fit(xdata, ydata, mu0, sigma0, return_all=False):
     """
     Finding best fit function.
     Trying to fit Gaussian, truncated Gaussian and skewed Gaussian.
@@ -253,6 +254,11 @@ def find_best_fit(xdata, ydata, mu0, sigma0):
     yydata[10:-10] = ydata
     # Empirical first estimate for the Student's parameter:
     nu0 = np.min([np.power(sigma0, -0.7), 1])
+    y_good = np.where(ydata > 0)[0]
+    lower = xdata[y_good[0]]
+    upper = xdata[y_good[-1]]
+    xdata = xdata[y_good[0]:y_good[-1] + 1]
+    ydata = ydata[y_good[0]:y_good[-1] + 1]
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', category=RuntimeWarning)
         fits = {}
@@ -279,6 +285,8 @@ def find_best_fit(xdata, ydata, mu0, sigma0):
                 fits['S'][1] = 1e11
     best = '-'
     best_value = 1e20
+    if return_all:
+        return fits
     for key, value in fits.iteritems():
         if value[1] < best_value:
             best = key

@@ -3,12 +3,7 @@ from scipy.stats import norm, truncnorm
 from unidam.skewnorm_boosted import skewnorm_boosted as skewnorm
 from unidam.studentst_boosted import studentst_boosted as studentst
 from unidam.utils.trunc_revexpon import trunc_revexpon
-from unidam.utils.fit import trunc_line
-
-class TruncLine(object):
-    @classmethod
-    def pdf(cls, *par):
-        return trunc_line(*par)
+from unidam.utils.trunc_line import TruncLine
 
 def get_param(fit, par):
     """

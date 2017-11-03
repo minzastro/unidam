@@ -19,6 +19,8 @@ def get_ydata(name, row, binx):
     if row['%s_fit' % name] in 'GSTPLF':
         func, par = get_param(row['%s_fit' % name], row['%s_par' % name])
         ydata = func.pdf(binx, *par)
+        if np.any(ydata) < 0:
+            print name, ydata
     else:
         ydata = np.zeros_like(binx)
     return ydata
@@ -61,7 +63,7 @@ def plot_pdf(xid, fits, name, data, column, ax, each=False,
         if w[stage] < 0.03:
             continue
         l = ax.step(binx, n, label='Stage %s' % label[stage], where='mid',
-                    linewidth=1.5, color=lcolors[stage])
+                    linewidth=1., color=lcolors[stage])
         lines.append(l[0])
         labels.append('Stage %s' % label[stage])
         ns.append(n)
@@ -72,7 +74,7 @@ def plot_pdf(xid, fits, name, data, column, ax, each=False,
         l = ax.plot(row['%s_bins_debug' % name],
                     np.array(row['%s_hist_debug' % name]) * row['uspdf_weight'],
                     label='Stage %s' % label[stage],
-                    linewidth=1., color=lcolors[stage])
+                    linewidth=1.5, color=lcolors[stage])
         lines.append(l[0])
         labels.append('Stage %s' % label[stage])
         ns.append(n)

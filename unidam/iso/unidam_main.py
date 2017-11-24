@@ -194,7 +194,7 @@ class UniDAMTool(object):
             print('No spectral params for %s' % row[self.id_column])
             return {'id': row[self.id_column],
                     'error': 'No spectral params'}
-        if np.any(self.param < -100.) or np.any(self.param_err < 0):
+        if np.any(self.param < -100.) or np.any(self.param_err <= 0):
             print('No spectral params or invalid params for %s' % row[self.id_column])
             return {'id': row[self.id_column],
                     'error': 'No spectral params or invalid params'}

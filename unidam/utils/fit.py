@@ -285,16 +285,17 @@ def find_best_fit(xdata, ydata, mu0, sigma0, return_all=False):
                 fits['S'][1] = 1e11
     best = '-'
     best_value = 1e20
-    if return_all:
-        return fits
     for key, value in fits.iteritems():
         if value[1] < best_value:
             best = key
             best_value = value[1]
         # print(key, value)
-    if best in 'TL':
-        # We have to include limits for a truncated Gaussian
-        fits[best][0] = np.insert(fits[best][0], 2, [lower, upper])
-    elif best == 'P':
-        fits[best][0] = np.insert(fits[best][0], 3, [lower, upper])
-    return best, fits[best][0], fits[best][1]
+        if key in 'TL':
+            # We have to include limits for a truncated Gaussian
+            fits[key][0] = np.insert(fits[key][0], 2, [lower, upper])
+        elif key == 'P':
+            fits[key][0] = np.insert(fits[key][0], 3, [lower, upper])
+    if return_all:
+        return fits
+    else:
+        return best, fits[best][0], fits[best][1]

@@ -90,3 +90,8 @@ def wstatistics(data, weights, moments=4):
         if moments >= 4:
             result.append(np.average(((data - mean)/std)**4, weights=weights))
     return result
+
+
+def move_to_end(arr, item):
+    if item in arr:
+        arr.append(arr.pop(arr.index(item)))

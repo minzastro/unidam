@@ -24,7 +24,7 @@ def histogram_splitter(hist, bins, min_order=2, max_order=3, dip_depth=0.75,
     # Locate minima and maxima
     mins = argrelextrema(hist, np.less_equal, order=min_order)[0]
     # Pad right with zeros + wrap to get maxima on first/last bin correctly
-    maxs = argrelextrema(np.append(hist, np.zeros(3)), np.greater,
+    maxs = argrelextrema(np.append(hist, np.zeros(max_order)), np.greater,
                          order=max_order, mode='wrap')[0]
     if use_spikes:
         with np.errstate(all='ignore'):

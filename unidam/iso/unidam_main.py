@@ -3,20 +3,19 @@ import os
 import warnings
 from collections import OrderedDict
 from ConfigParser import ConfigParser
-import pylab as plt
 import numpy as np
 import simplejson as json
 from astropy.table import Table, Column
 from astropy.io import fits
-from scipy.stats import chi2, norm
+from scipy.stats import chi2
 from scipy.ndimage.filters import gaussian_filter1d
-from unidam.iso.model_fitter import model_fitter as mf # pylint: disable=no-member
+from unidam.iso.model_fitter import model_fitter as mf  # pylint: disable=no-member
 from unidam.iso.histogram_splitter import histogram_splitter
 from unidam.utils.fit import find_best_fit
-from unidam.utils.mathematics import wstatistics, quantile, bin_estimate, to_borders
+from unidam.utils.mathematics import wstatistics, quantile, bin_estimate, \
+                                     to_borders, move_to_end
 from unidam.utils.confidence import find_confidence, ONE_SIGMA, THREE_SIGMA
 from unidam.utils.stats import to_bins
-from unidam.iso import extinction
 from unidam.utils import constants
 from unidam.utils.local import vargauss_filter1d
 
@@ -58,6 +57,10 @@ class UniDAMTool(object):
 
     MIN_USPDF_WEIGHT = 0.03
 
+    # These special distance-related columns are treated differently
+    # by the FORTRAN module.
+    SPECIAL = ['distance_modulus', 'extinction', 'distance', 'parallax']
+
     MINIMUM_STEP = {'age': 0.02,
                     'distance_modulus': 0.04,
                     'distance': 100.,
@@ -90,6 +93,8 @@ class UniDAMTool(object):
             if not config.has_option('general', key):
                 config.set('general', key, str(value))
         self.fitted_columns = get_splitted(config, 'fitted_columns')
+        for item in self.SPECIAL:
+            move_to_end(self.fitted_columns, item)
         # This array contains indices in the model table for input data
         self.model_columns = get_splitted(config, 'model_columns')
         self.default_bands = get_splitted(config, 'band_columns')
@@ -110,10 +115,7 @@ class UniDAMTool(object):
         mf.distance_prior = config.getint('general', 'distance_prior')
         mf.allow_negative_extinction = config.getboolean(
             'general', 'allow_negative_extinction')
-        for icolumn, column in enumerate(['distance_modulus',
-                                          'extinction',
-                                          'distance',
-                                          'parallax']):
+        for icolumn, column in enumerate(self.SPECIAL):
             mf.special_columns[icolumn] = column in self.fitted_columns
         mf.distance_known = config.getboolean('general', 'distance_known')
         if mf.distance_known:
@@ -366,17 +368,20 @@ class UniDAMTool(object):
         if param == 'age':
             #step = self.MINIMUM_STEP[param]
             xbins = to_bins(self.age_grid)
+            max_order = 10
         else:
             step, _ = bin_estimate(stage_data[:, split_column],
                                    stage_data[:, self.w_column])
             step = max(step, self.MINIMUM_STEP[param])
             xbins = np.arange(stage_data[:, split_column].min() - step * 0.5,
                               stage_data[:, split_column].max() + step * 1.5, step)
+            max_order = 4
         histogram = np.histogram(stage_data[:, split_column],
                                  bins=xbins,
                                  weights=stage_data[:, self.w_column])
         for split in histogram_splitter(histogram[0], histogram[1],
-                                        use_spikes=False, dip_depth=dip):
+                                        use_spikes=False, dip_depth=dip,
+                                        max_order=max_order):
             yield stage_data[stage_data[:, split_column] <= split]
             stage_data = stage_data[stage_data[:, split_column] > split]
         # Do not forget to yield last item
@@ -421,7 +426,8 @@ class UniDAMTool(object):
                 if name == 'extinction':
                     m_min = mode_data[mode_data > 0].min() / 2.
                 h, _ = bin_estimate(mode_data, weights)
-                h = max(h, self.MINIMUM_STEP[name])
+                if name in self.MINIMUM_STEP:
+                    h = max(h, self.MINIMUM_STEP[name])
                 if h < np.finfo(np.float32).eps:
                     # In some (very ugly) cases h cannot be properly
                     # determined...
@@ -739,15 +745,21 @@ def get_table(idtype=str, fitted_columns={}):
              'T': 'K',
              'parallax': 'mas'}
     for key in fitted_columns.iterkeys():
+        if key in ['stage']:
+            continue
         if key in units:
             unit = units[key]
-            for suffix in ['_mean', '_err', '_mode', '_median',
-                           '_low_1sigma', '_up_1sigma',
-                           '_low_3sigma', '_up_3sigma']:
-                final['%s%s' % (key, suffix)] = float_column(unit=unit)
-            final['%s_mean' % key].meta['ucd'] = ucd[key]
-            final['%s_fit' % key] = Column(dtype='S1')
-            final['%s_par' % key] = Column(dtype=float, shape=(5))
+            meta = ucd[key]
+        else:
+            unit = ''
+            meta = ''
+        for suffix in ['_mean', '_err', '_mode', '_median',
+                       '_low_1sigma', '_up_1sigma',
+                       '_low_3sigma', '_up_3sigma']:
+            final['%s%s' % (key, suffix)] = float_column(unit=unit)
+        final['%s_mean' % key].meta['ucd'] = meta
+        final['%s_fit' % key] = Column(dtype='S1')
+        final['%s_par' % key] = Column(dtype=float, shape=(5))
     if 'distance_modulus' in fitted_columns:
         for key in ['dm_age', 'age_dm', 'dm_mass']:
             final['%s_slope' % key] = float_column()

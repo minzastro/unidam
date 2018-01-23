@@ -12,7 +12,7 @@ def get_param(fit, par):
     if fit == 'S':
         return skewnorm, [par[2], par[0], par[1]]
     elif fit == 'F':
-        return TruncLine, par[:-1]
+        return TruncLine, par[:4]
     elif fit == 'G':
         return norm, [par[0], par[1]]
     elif fit == 'T':

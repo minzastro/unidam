@@ -482,7 +482,6 @@ class UniDAMTool(object):
         elif fit == 'P':
             result_par[3] = mode_data.min()
             result_par[4] = mode_data.max()
-
         result = {'_mean': avg,
                   '_err': err,
                   '_mode': mode,
@@ -603,9 +602,9 @@ class UniDAMTool(object):
                 new_result['extinction_smooth'] = smooth_extinction,
                 smooth = smooth_extinction
             elif key == 'distance':
-                smooth = 2. * np.log(10.) * smooth_distance
+                smooth = 0.2 * np.log(10.) * smooth_distance
             elif key == 'parallax':
-                smooth = 0.02 * np.log(10.) * smooth_distance
+                smooth = 0.2 * np.log(10.) * smooth_distance
             else:
                 smooth = None
             new_result.update(self.process_mode(key,

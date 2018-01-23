@@ -111,10 +111,10 @@ def kl_divergence(x, func, par, y):
     Symmetric Kullback-Leibler divergence value.
     """
     values = func(x, *par)
-    mask = np.logical_and(values > 1e-50, y > 1e-50)
+    mask = np.logical_and(y > 1e-50, values > 1e-50)
     if np.any(mask) and mask.sum() > 2:
-        return np.sum(values[mask]*np.log(values[mask]/y[mask])) + \
-               np.sum(y[mask]*np.log(y[mask]/values[mask]))
+        return (np.sum(values[mask]*np.log(values[mask] / y[mask])) +
+                np.sum(y[mask]*np.log(y[mask]/values[mask]))) / mask.sum()
     else:
         return 2e10
 
@@ -273,12 +273,13 @@ def find_best_fit(xdata, ydata, mu0, sigma0, return_all=False):
         fits['T'] = do_fit_trunc(xxdata, yydata, tgauss, (mu0, sigma0),
                                  (lower, upper))
         if (fits['L'][0][0] < upper and fits['L'][0][0]> lower) or fits['L'][1] > 1e9:
-            fits['G'] = do_fit(xxdata, yydata, gauss, (mu0, sigma0))
+            # Skipping Gaussian (for now)
+            # fits['G'] = do_fit(xxdata, yydata, gauss, (mu0, sigma0))
+            # if fits['G'][0][0] < lower or fits['G'][0][0] > upper:
+            #     fits['G'][1] = 3e11
             param = estimate_skew(mu0, sigma0, xxdata[np.argmax(yydata)])
             fits['S'] = do_fit(xxdata, yydata, skew_gauss,
                                [mu0, sigma0, param])
-            if fits['G'][0][0] < lower or fits['G'][0][0] > upper:
-                fits['G'][1] = 3e11
             if np.abs(fits['S'][0][2]) > 50:
                 # Exclude extremly skewed shapes.
                 # They are to be replaced by truncated gaussians.

@@ -1,50 +1,48 @@
 module model_fitter
-! Fortran module of the UniDAM.
-! Equations referred to are from Mints and Hekker (2017).
+!! Fortran module of the UniDAM.
+!! Equations referred to are from Mints and Hekker (2017).
 implicit none
 
-! All models
+!> All models
 real, allocatable :: models(:, :)
-! This array contains a mask for models within 4 sigmas
+!> This array contains a mask for models within 4 sigmas
 logical, allocatable :: mask_models(:)
 real, allocatable :: model_params(:, :)
-! Parameters for a current star (T, logg, feh + uncertainty)
+!> Parameters for a current star (T, logg, feh + uncertainty)
 real, allocatable :: param(:), param_err(:)
-! Visible magnitudes for a current star
+!> Visible magnitudes for a current star
 real, allocatable :: mag(:), mag_err(:)
-! Extinction coefficiens (see eq 8 in Paper 1)
+!> Extinction coefficiens (see eq 8 in Paper 1)
 real, allocatable :: Ck(:)
-! Indices of absolute magnitude columns in models array 
+!> Indices of absolute magnitude columns in models array 
 integer, allocatable :: abs_mag(:)
-! Indices of "observed" columns in models array (default: T, logg, feh) 
+!> Indices of "observed" columns in models array (default: T, logg, feh) 
 integer, allocatable :: model_columns(:)
-! Indices of columns for derived values in models array 
+!> Indices of columns for derived values in models array 
 integer, allocatable :: fitted_columns(:)
-! Number of columns in the models array
+!> Number of columns in the models array
 integer, save :: model_column_count
-! Matrix for eq 15 and inverse of its determinant
+!> Matrix for eq 15 and inverse of its determinant
 real, save :: matrix0(2, 2), matrix_det
 real, save :: max_param_err = 4.
 logical, save :: use_model_weight = .true.
 logical, save :: use_magnitude_probability = .true.
 logical, save :: debug = .false.
 logical, save :: allow_negative_extinction = .false.
-! Special array of flags.
-! Indicates if the following columns are needed:
-! Distance modulus, extinction, distance, parallax
+!> Special array of flags.
+!> Indicates if the following columns are needed:
+!> Distance modulus, extinction, distance, parallax
 logical, save :: special_columns(4)
 
-! Flag indicating if the distance is known
-logical, save :: distance_known = .false.
+!> Flag indicating if the parallax is known
 logical, save :: parallax_known = .false.
-real, save :: distance_modulus, distance_modulus_err
 real, save :: parallax, parallax_error, extinction, extinction_error
 
-! Distance prior:
-! 0 = none
-! 1 = d^2
-! 2 = RAVE Galaxy model (unimplemented)
-! 3 = RAVE Galaxy model + d^2 (unimplemented)
+!> Distance prior:
+!> 0 = none
+!> 1 = d^2
+!> 2 = RAVE Galaxy model (unimplemented)
+!> 3 = RAVE Galaxy model + d^2 (unimplemented)
 integer, save :: distance_prior = 1
 
 contains
@@ -70,7 +68,8 @@ subroutine alloc_settings(na, xabs_mag, nmod, xmodel_columns, nf, xfitted_column
     fitted_columns = xfitted_columns + 1
 end subroutine alloc_settings
 
-subroutine alloc_models(nn, mm, modarray) ! Load models
+subroutine alloc_models(nn, mm, modarray)
+!! Load models
   integer, intent(in) :: nn, mm
   real, intent(in) :: modarray(nn, mm)
     if (allocated(models)) then
@@ -84,7 +83,8 @@ subroutine alloc_models(nn, mm, modarray) ! Load models
     model_column_count = mm
 end subroutine alloc_models
 
-subroutine alloc_param(n, xparam, xparam_err) ! Load data for model params
+subroutine alloc_param(n, xparam, xparam_err)
+!! Load data for model params
   integer, intent(in) :: n
   real, intent(in) :: xparam(n), xparam_err(n)
     if (allocated(param)) then
@@ -99,7 +99,9 @@ subroutine alloc_param(n, xparam, xparam_err) ! Load data for model params
     param_err = xparam_err
 end subroutine alloc_param
 
-subroutine alloc_mag(n, xmag, xmag_err, xCk) ! Load data for magnitudes
+subroutine alloc_mag(n, xmag, xmag_err, xCk)
+!! Load data for magnitudes
+  !> Number of magnitudes
   integer, intent(in) :: n
   real, intent(in) :: xmag(n), xmag_err(n), xCk(n)
     if (allocated(mag)) then
@@ -129,6 +131,7 @@ subroutine solve_for_distance(vector, solution)
 end subroutine solve_for_distance
 
 real function mu_d_function(mud, vector)
+  !! Internal function for [solve_for_distance_with_parallax]
   real, intent(in) :: mud
   real, intent(in) :: vector(2)
   real Ak_local, pi
@@ -140,10 +143,10 @@ real function mu_d_function(mud, vector)
 end function mu_d_function
 
 subroutine solve_for_distance_with_parallax(vector, solution)
-  ! Solving the system of equations for distance modulus
-  ! and extinction for the case with parallax and extinction priors.
-  ! This is probably highly inefficient, an improvement
-  ! is needed here.
+  !! Solving the system of equations for distance modulus
+  !! and extinction for the case with parallax and extinction priors.
+  !! This is probably highly inefficient, an improvement
+  !! is needed here.
   real, intent(in) :: vector(2)
   real, intent(inout) :: solution(2)
   real Ak_old, mu_old
@@ -180,7 +183,7 @@ end subroutine solve_for_distance_with_parallax
 
 
 subroutine find_best(m_count)
-  ! Finding stellar parameters from observed + models
+  !! Finding stellar parameters from observed + models
   integer, parameter :: WSIZE = 30 ! Total number of parameters for output
   integer, intent(out) :: m_count
   integer i
@@ -199,11 +202,6 @@ subroutine find_best(m_count)
     enddo
     prob = size(fitted_columns) + count(special_columns) + 1 ! Here probablities start
     m_count = 1
-    if (distance_known) then
-      matrix0(1, 1) = matrix0(1, 1) + 1./distance_modulus_err**2
-      matrix0(2, 2) = matrix0(2, 2) + 1./(25.*extinction**2)
-      matrix_det = 1./(matrix0(1, 1) * matrix0(2, 2) - matrix0(1, 2)*matrix0(2, 1))
-    endif
     do i = 1, size(mask_models)
       if (mask_models(i)) then ! Take only filtered models
         ! Calculate chi^2 value for model parameters:
@@ -214,15 +212,7 @@ subroutine find_best(m_count)
           cycle
         endif
         mu_d(:) = -1.
-        if (distance_known) then
-          ! Distance is known, solve for extinction only
-          vector(1) = sum((mag - models(i, abs_mag))*mag_err) + distance_modulus / distance_modulus_err**2
-          vector(2) = sum((mag - models(i, abs_mag))*mag_err*Ck) + 1./(25.*extinction)
-          mu_d_noext = vector(1) / matrix0(1, 1)
-          L_sednoext = 0.5*(sum((mag - mu_d_noext - models(i, abs_mag))**2 * mag_err) + &
-                               ((mu_d_noext - distance_modulus)/distance_modulus_err)**2 + &
-                               (1./25.)) ! this is for extinction, sigma_A = 5 A_0
-        else if (parallax_known) then
+        if (parallax_known) then
           vector(1) = sum((mag - models(i, abs_mag))*mag_err)
           vector(2) = sum((mag - models(i, abs_mag))*mag_err*Ck)
           mu_d_noext = vector(1) / matrix0(1, 1)
@@ -248,13 +238,7 @@ subroutine find_best(m_count)
               ! then we can solve eq. 15
               bic1 = 2.*L_sednoext + log(float(size(mag_err)))
               call solve_for_distance(vector, mu_d)
-              if (distance_known) then
-                L_sed = 0.5*sum((mag - mu_d(1) - models(i, abs_mag) - Ck * mu_d(2))**2 * mag_err) + &
-                        0.5 * (mu_d(2) - extinction)**2 / (25.*extinction**2) + &
-                        0.5 * (mu_d(1) - distance_modulus)**2 / distance_modulus_err**2
-              else
-                L_sed = 0.5*sum((mag - mu_d(1) - models(i, abs_mag) - Ck * mu_d(2))**2 * mag_err)
-              endif
+              L_sed = 0.5*sum((mag - mu_d(1) - models(i, abs_mag) - Ck * mu_d(2))**2 * mag_err)
           endif
           bic2 = 2.*L_sed + 2.*log(float(size(mag_err)))
           if (((mu_d(2).lt.0.0).and.(.not.allow_negative_extinction)) .or. &

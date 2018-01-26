@@ -49,7 +49,6 @@ class UniDAMTool(object):
         'use_magnitudes': '1',
         'fitted_columns': 'stage,age,mass,distance_modulus,extinction,distance,parallax',
         'max_param_err': '4',
-        'distance_known': '0',
         'parallax_known': '0',
         'allow_negative_extinction': '0',
         'dump_pdf': False
@@ -117,9 +116,6 @@ class UniDAMTool(object):
             'general', 'allow_negative_extinction')
         for icolumn, column in enumerate(self.SPECIAL):
             mf.special_columns[icolumn] = column in self.fitted_columns
-        mf.distance_known = config.getboolean('general', 'distance_known')
-        if mf.distance_known:
-            self._update_config('distance', config)
         mf.parallax_known = config.getboolean('general', 'parallax_known')
         if mf.parallax_known:
             self._update_config('parallax', config)
@@ -219,13 +215,10 @@ class UniDAMTool(object):
             mf.matrix_det = 0.  # Will be unsused anyway
         mf.alloc_mag(self.mag, self.mag_err, self.Rk)
         mf.alloc_param(self.param, self.param_err)
-        fitted = [item for item in self.fitted_columns.values() if item >= 0 ]
+        # Collect model-file column indices of fitted columns
+        fitted = [item for item in self.fitted_columns.values() if item >= 0]
         mf.alloc_settings(self.abs_mag, self.model_columns.values(),
                           fitted)
-        if mf.distance_known:
-            mf.distance_modulus = row[self.config['distance']]
-            mf.distance_modulus_err = row[self.config['distance_err']]
-            mf.extinction = row[self.config['extinction']]
         if mf.parallax_known:
             mf.parallax = row[self.config['parallax']]
             mf.parallax_error = row[self.config['parallax_err']]
@@ -393,9 +386,36 @@ class UniDAMTool(object):
         separated by valleys.
         """
         for part in self.split_mass(stage_data):
-            #for part2 in self.split_other(part, 'distance_modulus'):
-                for part3 in self.split_other(part, 'age'):
-                    yield part3
+            for part3 in self.split_other(part, 'age'):
+                yield part3
+
+    def get_bin_count(self, name, mode_data, weights):
+        m_min = mode_data.min()
+        m_max = mode_data.max()
+        # We use different binning for different parameters.
+        if name == 'mass':
+            # Fixed step in mass, as masses are discrete
+            # for some isochrones.
+            bins = np.arange(m_min * 0.95, m_max * 1.1, 0.06)
+        elif name == 'distance':
+            # Fixed number of bins for distances
+            bins = np.linspace(m_min * 0.95, m_max, 50)
+        elif name == 'age':
+            bins = to_bins(self.age_grid)
+        else:
+            if name == 'extinction':
+                m_min = mode_data[mode_data > 0].min() / 2.
+            h, _ = bin_estimate(mode_data, weights)
+            if name in self.MINIMUM_STEP:
+                h = max(h, self.MINIMUM_STEP[name])
+            if h < np.finfo(np.float32).eps:
+                # In some (very ugly) cases h cannot be properly
+                # determined...
+                bin_count = 3
+            else:
+                bin_count = int((m_max - m_min) / h) + 1
+            bins = np.linspace(m_min, m_max, bin_count)
+        return bins
 
     def process_mode(self, name, mode_data, weights, smooth=None):
         """
@@ -412,29 +432,6 @@ class UniDAMTool(object):
             err = 0.
             fit, par, kl_div = 'N', [], 1e10
         else:
-            # We use different binning for different parameters.
-            if name == 'mass':
-                # Fixed step in mass, as masses are discrete
-                # for some isochrones.
-                bins = np.arange(m_min * 0.95, m_max * 1.1, 0.06)
-            elif name == 'distance':
-                # Fixed number of bins for distances
-                bins = np.linspace(m_min * 0.95, m_max, 50)
-            elif name == 'age':
-                bins = to_bins(self.age_grid)
-            else:
-                if name == 'extinction':
-                    m_min = mode_data[mode_data > 0].min() / 2.
-                h, _ = bin_estimate(mode_data, weights)
-                if name in self.MINIMUM_STEP:
-                    h = max(h, self.MINIMUM_STEP[name])
-                if h < np.finfo(np.float32).eps:
-                    # In some (very ugly) cases h cannot be properly
-                    # determined...
-                    bin_count = 3
-                else:
-                    bin_count = int((m_max - m_min) / h) + 1
-                bins = np.linspace(m_min, m_max, bin_count)
             median = quantile(mode_data, weights)
             avg, err = wstatistics(mode_data, weights, 2)
             if smooth is not None:
@@ -446,6 +443,7 @@ class UniDAMTool(object):
                 # This is done for the case of very low weights...
                 # I guess it should be done otherwise, but...
                 err = np.std(mode_data)
+            bins = self.get_bin_count(self, name, mode_data, weights)
             if len(bins) <= 4:
                 # This happens sometimes, huh.
                 mode = avg
@@ -471,7 +469,8 @@ class UniDAMTool(object):
                     mode = avg
                     fit, par, kl_div = 'N', [], 7e10
                 else:
-                    fit, par, kl_div = find_best_fit(bin_centers, hist, avg, err)
+                    fit, par, kl_div = find_best_fit(bin_centers, hist,
+                                                     avg, err)
                     if kl_div > 1e9:
                         # No fit converged.
                         fit = 'E'
@@ -489,7 +488,8 @@ class UniDAMTool(object):
                   '_fit': fit,
                   }
         if name == 'extinction':
-            result['_zero'] = mode_data[mode_data < m_min].shape[0] / float(mode_data.shape[0])
+            result['_zero'] = mode_data[mode_data < m_min].shape[0] \
+                / float(mode_data.shape[0])
         if self.dump and bin_centers is not None:
             result.update({'_bins_debug': bin_centers,
                            '_hist_debug': hist})
@@ -497,9 +497,11 @@ class UniDAMTool(object):
             if fit != 'F':
                 result_par[1] = abs(result_par[1])
             # Find confidence intervals.
-            sigma1 = to_borders(find_confidence(bin_centers, hist, ONE_SIGMA),
+            sigma1 = to_borders(find_confidence(bin_centers, hist,
+                                                ONE_SIGMA),
                                 mode_data.min(), mode_data.max())
-            sigma3 = to_borders(find_confidence(bin_centers, hist, THREE_SIGMA),
+            sigma3 = to_borders(find_confidence(bin_centers, hist,
+                                                THREE_SIGMA),
                                 mode_data.min(), mode_data.max())
             result.update({'_low_1sigma': sigma1[0],
                            '_up_1sigma': sigma1[1],
@@ -557,6 +559,28 @@ class UniDAMTool(object):
                                                  adata[:, self.w_column],
                                                  moments=2)[1]}
 
+    def add_to_pdf(self, xdata, mode_weight):
+        """
+        Collecting total PDFs in age and age-distance modulus.
+        """
+        age_col = self.fitted_columns.keys().index('age')
+        age_histogram = np.histogram(xdata[:, age_col],
+                                     to_bins(constants.AGE_RANGE),
+                                     weights=xdata[:, self.w_column],
+                                     normed=True)[0]
+        age_histogram = age_histogram * mode_weight / age_histogram.sum()
+        age_histogram[np.isnan(age_histogram)] = 0.
+        self.total_age_pdf += age_histogram
+        if 'distance_modulus' in self.fitted_columns:
+            dm_col = self.fitted_columns.keys().index('distance_modulus')
+            two_histogram = np.histogram2d(
+                xdata[:, dm_col], xdata[:, age_col],
+                (to_bins(constants.DM_RANGE), to_bins(constants.AGE_RANGE)),
+                weights=xdata[:, self.w_column], normed=True)[0]
+            two_histogram = two_histogram * mode_weight / two_histogram.sum()
+            two_histogram[np.isnan(two_histogram)] = 0.
+            self.total_2d_pdf += two_histogram
+
     def get_row(self, xdata, wtotal):
         """
         Prepare output row for the selection of models.
@@ -601,9 +625,7 @@ class UniDAMTool(object):
             elif key == 'extinction':
                 new_result['extinction_smooth'] = smooth_extinction,
                 smooth = smooth_extinction
-            elif key == 'distance':
-                smooth = 0.2 * np.log(10.) * smooth_distance
-            elif key == 'parallax':
+            elif key == 'distance' or key == 'parallax':
                 smooth = 0.2 * np.log(10.) * smooth_distance
             else:
                 smooth = None
@@ -611,33 +633,9 @@ class UniDAMTool(object):
                                                 xdata[:, ikey],
                                                 xdata[:, self.w_column],
                                                 smooth))
-        if self.dump_pdf:
-            if 'age' in self.fitted_columns:
-                age_col = self.fitted_columns.keys().index('age')
-                age_histogram = np.histogram(xdata[:, age_col],
-                                             to_bins(constants.AGE_RANGE),
-                                             weights=xdata[:, self.w_column],
-                                             normed=True)[0]
-                age_histogram = age_histogram * mode_weight / \
-                    age_histogram.sum()
-                age_histogram[np.isnan(age_histogram)] = 0.
-                self.total_age_pdf += age_histogram
-                if 'distance_modulus' in self.fitted_columns:
-                    dm_col = self.fitted_columns.keys()\
-                        .index('distance_modulus')
-                    two_histogram = np.histogram2d(
-                        xdata[:, dm_col],
-                        xdata[:, age_col],
-                        (to_bins(constants.DM_RANGE),
-                         to_bins(constants.AGE_RANGE)),
-                        weights=xdata[:, self.w_column],
-                        normed=True)[0]
-                    two_histogram = two_histogram * mode_weight \
-                        / two_histogram.sum()
-                    two_histogram[np.isnan(two_histogram)] = 0.
-                    self.total_2d_pdf += two_histogram
-        if len(xdata) > 3 and not mf.distance_known and \
-            'distance_modulus' in self.fitted_columns:
+        if self.dump_pdf and 'age' in self.fitted_columns:
+            self.add_to_pdf(xdata, mode_weight)
+        if len(xdata) > 3 and 'distance_modulus' in self.fitted_columns:
             if 'age' in self.fitted_columns:
                 new_result.update(self.get_correlations('distance_modulus',
                                                         'age', xdata))
@@ -750,8 +748,7 @@ def get_table(idtype=str, fitted_columns={}):
             unit = units[key]
             meta = ucd[key]
         else:
-            unit = ''
-            meta = ''
+            unit, meta = '', ''
         for suffix in ['_mean', '_err', '_mode', '_median',
                        '_low_1sigma', '_up_1sigma',
                        '_low_3sigma', '_up_3sigma']:

@@ -7,11 +7,16 @@ implicit none
 real, allocatable :: models(:, :)
 !> This array contains a mask for models within 4 sigmas
 logical, allocatable :: mask_models(:)
+!> Parameters of the selected models (TODO: document indices)
 real, allocatable :: model_params(:, :)
-!> Parameters for a current star (T, logg, feh + uncertainty)
-real, allocatable :: param(:), param_err(:)
+!> Parameters for a current star (T, logg, feh)
+real, allocatable :: param(:)
+!> Uncertainties of parameters for a current star (T, logg, feh)
+real, allocatable :: param_err(:)
 !> Visible magnitudes for a current star
-real, allocatable :: mag(:), mag_err(:)
+real, allocatable :: mag(:)
+!> Uncertainties of visible magnitudes for a current star
+real, allocatable :: mag_err(:)
 !> Extinction coefficiens (see eq 8 in Paper 1)
 real, allocatable :: Ck(:)
 !> Indices of absolute magnitude columns in models array 
@@ -23,11 +28,18 @@ integer, allocatable :: fitted_columns(:)
 !> Number of columns in the models array
 integer, save :: model_column_count
 !> Matrix for eq 15 and inverse of its determinant
-real, save :: matrix0(2, 2), matrix_det
+real, save :: matrix0(2, 2),
+!> Determinant of matrix0
+real, save :: matrix_det
+!> Maximum deviation from param(:) for models
 real, save :: max_param_err = 4.
+!> Use mass, age and metallicity weighting for models
 logical, save :: use_model_weight = .true.
+!> Use SED fit to constrain models
 logical, save :: use_magnitude_probability = .true.
+!> Output debugging information
 logical, save :: debug = .false.
+!> Allow for negative extinctions when solving for distances
 logical, save :: allow_negative_extinction = .false.
 !> Special array of flags.
 !> Indicates if the following columns are needed:
@@ -47,7 +59,8 @@ integer, save :: distance_prior = 1
 
 contains
 
-!! ALLOCATION ROUTINES
+! ALLOCATION ROUTINES
+!> Allocate settings from config file
 subroutine alloc_settings(na, xabs_mag, nmod, xmodel_columns, nf, xfitted_columns)
   integer, intent(in) :: na, nmod, nf
   integer, intent(in) :: xabs_mag(na), xmodel_columns(nmod), xfitted_columns(nf)
@@ -184,7 +197,9 @@ end subroutine solve_for_distance_with_parallax
 
 subroutine find_best(m_count)
   !! Finding stellar parameters from observed + models
-  integer, parameter :: WSIZE = 30 ! Total number of parameters for output
+  !> Maximum number of parameters for output
+  integer, parameter :: WSIZE = 30
+  !> Number of consistent models found.
   integer, intent(out) :: m_count
   integer i
   integer off, prob

@@ -28,7 +28,7 @@ integer, allocatable :: fitted_columns(:)
 !> Number of columns in the models array
 integer, save :: model_column_count
 !> Matrix for eq 15 and inverse of its determinant
-real, save :: matrix0(2, 2),
+real, save :: matrix0(2, 2)
 !> Determinant of matrix0
 real, save :: matrix_det
 !> Maximum deviation from param(:) for models
@@ -324,6 +324,7 @@ subroutine find_best(m_count)
            p = p * distance * distance
         endif
         model_params(m_count, prob+2) = p
+        model_params(m_count, prob+3) = i
         if (debug) then
           write(66, *) models(i, model_column_count), models(i, abs_mag), &
                        models(i, model_columns), models(i, model_column_count-1), -99, &

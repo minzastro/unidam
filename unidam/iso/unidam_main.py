@@ -179,7 +179,7 @@ class UniDAMTool(object):
         self.mag_err = self.mag_err[mask]
         self.abs_mag = self.abs_mag[mask]
         self.Rk = self.Rk[mask]
-
+    
     def get_estimates(self, row, dump=False):
         """
         Estimate distance and other parameters set in self.fitted_columns.
@@ -443,7 +443,7 @@ class UniDAMTool(object):
                 # This is done for the case of very low weights...
                 # I guess it should be done otherwise, but...
                 err = np.std(mode_data)
-            bins = self.get_bin_count(self, name, mode_data, weights)
+            bins = self.get_bin_count(name, mode_data, weights)
             if len(bins) <= 4:
                 # This happens sometimes, huh.
                 mode = avg
@@ -581,6 +581,22 @@ class UniDAMTool(object):
             two_histogram[np.isnan(two_histogram)] = 0.
             self.total_2d_pdf += two_histogram
 
+    def dump_sed(self, adata):
+        mdata = mf.models[np.asarray(adata[:, self.w_column + 1], dtype=int)]
+        dm = adata[:, self.fitted_columns.keys().index('distance_modulus')]
+        ext = adata[:, self.fitted_columns.keys().index('extinction')]
+        weight = adata[:, self.w_column]
+        w = {'Predicted': {}, 'PredErr': {}, 
+             'Observed': {}, 'ObsErr': {}}
+        for iband, band in enumerate(self.default_bands.keys()):
+            w['Predicted'][band], w['PredErr'][band]  = wstatistics(
+                    mdata[:, self.default_bands[band]] + 
+                    dm + self.RK[band] * ext,
+                    weight, 2)
+            w['Observed'][band] = self.mag[iband]
+            w['ObsErr'][band] = 1./np.sqrt(self.mag_err[iband])
+        return w
+
     def get_row(self, xdata, wtotal):
         """
         Prepare output row for the selection of models.
@@ -616,6 +632,8 @@ class UniDAMTool(object):
                       'p_best': 1. - chi2.cdf(2. * l_best, dof + 3),
                       'p_sed': 1. - chi2.cdf(2. * l_sed, dof)
                       }
+        if self.dump:
+            new_result['sed_debug'] = self.dump_sed(xdata)
         for ikey, key in enumerate(self.fitted_columns.keys()):
             if key == 'stage':
                 continue

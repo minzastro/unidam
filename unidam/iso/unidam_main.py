@@ -70,6 +70,7 @@ class UniDAMTool(object):
         self.mag = None
         self.mag_matrix = None
         self.mag_err = None
+        self.mag_names = None
         self.abs_mag = None
         self.Rk = None
         self.param = None
@@ -175,6 +176,7 @@ class UniDAMTool(object):
         """
         Mask out missing magnitudes.
         """
+        self.mag_names = self.mag_names[mask]
         self.mag = self.mag[mask]
         self.mag_err = self.mag_err[mask]
         self.abs_mag = self.abs_mag[mask]
@@ -293,15 +295,15 @@ class UniDAMTool(object):
         Prepare magnitudes and spectral parameters
         for a given row.
         """
-        mag_names = self.default_bands.keys()
-        self.mag = np.zeros(len(mag_names))
-        self.mag_err = np.zeros(len(mag_names))
-        for iband, band in enumerate(mag_names):
+        self.mag_names = np.array(self.default_bands.keys(), dtype=str)
+        self.mag = np.zeros(len(self.mag_names))
+        self.mag_err = np.zeros(len(self.mag_names))
+        for iband, band in enumerate(self.mag_names):
             self.mag[iband] = row['%smag' % band]
             # Storing the inverse uncertainty squared
             # for computational efficiency.
             self.mag_err[iband] = 1. / (row['e_%smag' % band])**2
-        self.Rk = np.array([self.RK[band] for band in mag_names])
+        self.Rk = np.array([self.RK[band] for band in self.mag_names])
         self.abs_mag = np.array(self.default_bands.values(), dtype=int)
         # Filter out bad data:
         self._apply_mask(~(np.isnan(self.mag_err) + np.isnan(self.mag)))
@@ -443,13 +445,15 @@ class UniDAMTool(object):
                 # This is done for the case of very low weights...
                 # I guess it should be done otherwise, but...
                 err = np.std(mode_data)
+            # Get a first guess on the number of bins needed
             bins = self.get_bin_count(name, mode_data, weights)
-            if len(bins) <= 4:
+            if len(bins) <= 4 and name != 'age':
                 # This happens sometimes, huh.
                 mode = avg
                 fit, par, kl_div = 'N', [], 1e10
             else:
                 if name == 'age':
+                    # For ages we always use a fixed grid.
                     bin_centers = self.age_grid
                 else:
                     bin_centers = 0.5 * (bins[1:] + bins[:-1])
@@ -475,6 +479,8 @@ class UniDAMTool(object):
                         # No fit converged.
                         fit = 'E'
         result_par = np.array(list(par) + [0] * 5)[:5]
+        # TODO: bring to grid in ages, so that left/right edges are between
+        # grid points.
         if fit in 'TL':
             result_par[2] = mode_data.min()
             result_par[3] = mode_data.max()
@@ -588,7 +594,7 @@ class UniDAMTool(object):
         weight = adata[:, self.w_column]
         w = {'Predicted': {}, 'PredErr': {}, 
              'Observed': {}, 'ObsErr': {}}
-        for iband, band in enumerate(self.default_bands.keys()):
+        for iband, band in enumerate(self.mag_names):
             w['Predicted'][band], w['PredErr'][band]  = wstatistics(
                     mdata[:, self.default_bands[band]] + 
                     dm + self.RK[band] * ext,

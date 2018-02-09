@@ -19,6 +19,7 @@ parser.add_argument('-i', '--input', type=str, default=None,
 parser.add_argument('rest', nargs=argparse.REMAINDER)
 args = parser.parse_args()
 
+all_bands = list('UBVIJHK') + ['W1', 'W2'] # TODO: generalize
 print(args)
 if args.input is None:
     ids = []
@@ -29,8 +30,11 @@ else:
 for id in ids:
     print(id)
     data = json.load(open('dump/dump_%s.json' % id))
-    bands = list('UBVI') # TODO: generalize
-    xbands = np.arange(4)
+    bands = []
+    for b in all_bands:
+        if b in data[0]['sed_debug']['Observed']:
+            bands.append(b)
+    xbands = np.arange(len(bands))
     fig = plt.figure()
     ax1 = plt.subplot2grid((2,1), (0,0))
     ax2 = plt.subplot2grid((2,1), (1,0), sharex=ax1)

@@ -36,6 +36,9 @@ class NumpyAwareJSONEncoder(json.JSONEncoder):
 
 
 def get_splitted(config, name):
+    """
+    Get array from config.
+    """
     return config.get('general', name).split(',')
 
 
@@ -123,9 +126,9 @@ class UniDAMTool(object):
             self._update_config('extinction', config)
             self.MINIMUM_STEP['distance_modulus'] = 1e-5
         self.RK = {band: constants.R_FACTORS[band] / constants.R_FACTORS['K']
-                   for band in constants.R_FACTORS.keys()}
+                   for band in constants.R_FACTORS}
         self.RV = {band: constants.R_FACTORS[band] / constants.R_FACTORS['V']
-                   for band in constants.R_FACTORS.keys()}
+                   for band in constants.R_FACTORS}
         self._load_models(os.path.join(os.path.dirname(__file__),
                                        config.get('general', 'model_file')))
 
@@ -181,27 +184,29 @@ class UniDAMTool(object):
         self.mag_err = self.mag_err[mask]
         self.abs_mag = self.abs_mag[mask]
         self.Rk = self.Rk[mask]
-    
-    def get_estimates(self, row, dump=False):
+
+    def _validate_row(self, row_id):
         """
-        Estimate distance and other parameters set in self.fitted_columns.
+        Check if the row is good for processing.
         """
-        # Set maximum differnce between model and observation in units
-        # of the observational error.
-        self.dump = dump
-        self.prepare_row(row)
         if np.isnan(self.param).any():
-            print('No spectral params for %s' % row[self.id_column])
-            return {'id': row[self.id_column],
+            print('No spectral params for %s' % row_id)
+            return {'id': row_id,
                     'error': 'No spectral params'}
         if np.any(self.param < -100.) or np.any(self.param_err <= 0):
-            print('No spectral params or invalid params for %s' % row[self.id_column])
-            return {'id': row[self.id_column],
+            print('No spectral params or invalid params for %s' % row_id)
+            return {'id': row_id,
                     'error': 'No spectral params or invalid params'}
-        if len(self.mag) == 0:
-            print('No photometry for %s' % row[self.id_column])
-            return {'id': row[self.id_column],
+        if self.mag.size == 0:
+            print('No photometry for %s' % row_id)
+            return {'id': row_id,
                     'error': 'No photometry'}
+        return None
+
+    def _push_to_fortran(self, row):
+        """
+        Push all data for FORTRAN module.
+        """
         # This matrix is used to solve linear equations system for
         # distance modulus and extinctions.
         self.mag_matrix = [[np.sum(self.mag_err),
@@ -211,7 +216,7 @@ class UniDAMTool(object):
         # Passing values to the module
         mf.matrix0 = self.mag_matrix
         mf.mask_models[:] = True
-        if len(self.mag_err) > 1:
+        if self.mag_err.size > 1:
             mf.matrix_det = 1. / np.linalg.det(self.mag_matrix)
         else:
             mf.matrix_det = 0.  # Will be unsused anyway
@@ -226,6 +231,19 @@ class UniDAMTool(object):
             mf.parallax_error = row[self.config['parallax_err']]
             mf.extinction = row[self.config['extinction']]
             mf.extinction_error = row[self.config['extinction_err']]
+
+    def get_estimates(self, row, dump=False):
+        """
+        Estimate distance and other parameters set in self.fitted_columns.
+        """
+        # Set maximum differnce between model and observation in units
+        # of the observational error.
+        self.dump = dump
+        self.prepare_row(row)
+        validate = self._validate_row(row[self.id_column])
+        if validate is not None:
+            return validate
+        self._push_to_fortran(row)
         # HERE THINGS HAPPEN!
         m_count = mf.find_best()
         # Now deal with the result:
@@ -278,16 +296,17 @@ class UniDAMTool(object):
         result.sort(key=lambda x: x['uspdf_priority'])
         result = self.assign_quality(result)
         if self.dump:
+            # Store results into a json-file.
             self.dump_results(model_params, row, result)
             # Delete *debug* keys in the results
-            # They are not to be exported.
-            for row in result:
+            # They are not to be exported to final fits table.
+            for rrow in result:
                 todel = []
-                for key in row:
+                for key in rrow:
                     if key.endswith('debug'):
                         todel.append(key)
                 for key in todel:
-                    del row[key]
+                    del rrow[key]
         return result
 
     def prepare_row(self, row):
@@ -318,9 +337,9 @@ class UniDAMTool(object):
         Special treatment for masses - PDF can contain a sharp peak.
         """
         if 'mass' not in self.fitted_columns:
+            # We cannot fit in mass, if mass is not fitted for
             yield stage_data
             return
-            #raise NotImplementedError('mass has to be fitted')
         mass_column = self.fitted_columns.keys().index('mass')
         # Make a histogram in log-masses
         xbins = np.logspace(np.log10(stage_data[:, mass_column].min() * 0.9),
@@ -356,12 +375,11 @@ class UniDAMTool(object):
         Split in "other" params (distance modulus or age).
         """
         if param not in self.fitted_columns:
+            #  We cannot split in parameter than is not fitted for.
             yield stage_data
             return
-            #raise NotImplementedError('%s has to be fitted' % param)
         split_column = self.fitted_columns.keys().index(param)
         if param == 'age':
-            #step = self.MINIMUM_STEP[param]
             xbins = to_bins(self.age_grid)
             max_order = 10
         else:
@@ -392,6 +410,9 @@ class UniDAMTool(object):
                 yield part3
 
     def get_bin_count(self, name, mode_data, weights):
+        """
+        Estimate the number of bins needed to represent the data.
+        """
         m_min = mode_data.min()
         m_max = mode_data.max()
         # We use different binning for different parameters.
@@ -470,6 +491,7 @@ class UniDAMTool(object):
                         hist = vargauss_filter1d(bin_centers, hist, smooth)
                 mode = bin_centers[np.argmax(hist)]
                 if np.sum(hist > 0) < 4:
+                    #  Less than 4 non-negative bins, impossible to fit.
                     mode = avg
                     fit, par, kl_div = 'N', [], 7e10
                 else:
@@ -478,27 +500,25 @@ class UniDAMTool(object):
                     if kl_div > 1e9:
                         # No fit converged.
                         fit = 'E'
-        result_par = np.array(list(par) + [0] * 5)[:5]
-        # TODO: bring to grid in ages, so that left/right edges are between
-        # grid points.
-        if fit in 'TL':
-            result_par[2] = mode_data.min()
-            result_par[3] = mode_data.max()
-        elif fit == 'P':
-            result_par[3] = mode_data.min()
-            result_par[4] = mode_data.max()
         result = {'_mean': avg,
                   '_err': err,
                   '_mode': mode,
                   '_median': median,
                   '_fit': fit,
-                  }
+                 }
         if name == 'extinction':
             result['_zero'] = mode_data[mode_data < m_min].shape[0] \
                 / float(mode_data.shape[0])
         if self.dump and bin_centers is not None:
             result.update({'_bins_debug': bin_centers,
                            '_hist_debug': hist})
+        result_par = np.array(list(par) + [0] * 5)[:5]
+        if fit in 'TL':
+            result_par[2] = mode_data.min()
+            result_par[3] = mode_data.max()
+        elif fit == 'P':
+            result_par[3] = mode_data.min()
+            result_par[4] = mode_data.max()
         if fit in 'GSTPLF':
             if fit != 'F':
                 result_par[1] = abs(result_par[1])
@@ -588,32 +608,32 @@ class UniDAMTool(object):
             self.total_2d_pdf += two_histogram
 
     def dump_sed(self, adata):
+        """
+        Store Spectral Energy Distribution (SED) to result dictionary.
+        SED is calculated as a weighted mean (with scatter) for predicted
+        visible magnitudes.
+        """
         mdata = mf.models[np.asarray(adata[:, self.w_column + 1], dtype=int)]
         dm = adata[:, self.fitted_columns.keys().index('distance_modulus')]
         ext = adata[:, self.fitted_columns.keys().index('extinction')]
         weight = adata[:, self.w_column]
-        w = {'Predicted': {}, 'PredErr': {}, 
-             'Observed': {}, 'ObsErr': {}}
+        sed_dict = {'Predicted': {}, 'PredErr': {},
+                    'Observed': {}, 'ObsErr': {}}
         for iband, band in enumerate(self.mag_names):
-            w['Predicted'][band], w['PredErr'][band]  = wstatistics(
-                    mdata[:, self.default_bands[band]] + 
-                    dm + self.RK[band] * ext,
-                    weight, 2)
-            w['Observed'][band] = self.mag[iband]
-            w['ObsErr'][band] = 1./np.sqrt(self.mag_err[iband])
-        return w
+            sed_dict['Predicted'][band], sed_dict['PredErr'][band] = \
+                wstatistics(mdata[:, self.default_bands[band]] +
+                            dm + self.RK[band] * ext,
+                            weight, 2)
+            sed_dict['Observed'][band] = self.mag[iband]
+            sed_dict['ObsErr'][band] = 1./np.sqrt(self.mag_err[iband])
+        return sed_dict
 
     def get_row(self, xdata, wtotal):
         """
         Prepare output row for the selection of models.
         """
-        best_model = np.argmin(xdata[:, self.w_column - 1] +
-                               xdata[:, self.w_column - 2])
-        l_sed = xdata[best_model, self.w_column - 1]
-        l_best = l_sed + xdata[best_model, self.w_column - 2]
-        mode_weight = np.sum(xdata[:, self.w_column]) / wtotal
         dof = len(self.mag)
-        if len(self.mag_err) > 1:
+        if self.mag_err.size > 1:
             # Calculating smoothing parameters from the inverse
             # Hessian matrix
             covariance = np.linalg.inv(self.mag_matrix)
@@ -632,22 +652,26 @@ class UniDAMTool(object):
             smooth_distance = np.sqrt(covariance[0, 0])
             smooth_extinction = np.sqrt(covariance[1, 1])
             dof += 2
+        best_model = np.argmin(xdata[:, self.w_column - 1] +
+                               xdata[:, self.w_column - 2])
+        l_sed = xdata[best_model, self.w_column - 1]
+        l_best = l_sed + xdata[best_model, self.w_column - 2]
         new_result = {'stage': xdata[0, 0],
                       'uspdf_points': xdata.shape[0],
-                      'uspdf_weight': mode_weight,
+                      'uspdf_weight': np.sum(xdata[:, self.w_column]) / wtotal,
                       'p_best': 1. - chi2.cdf(2. * l_best, dof + 3),
                       'p_sed': 1. - chi2.cdf(2. * l_sed, dof)
-                      }
+                     }
         if self.dump:
             new_result['sed_debug'] = self.dump_sed(xdata)
         for ikey, key in enumerate(self.fitted_columns.keys()):
             if key == 'stage':
                 continue
             elif key == 'distance_modulus':
-                new_result['distance_modulus_smooth'] = smooth_distance,
+                new_result['distance_modulus_smooth'] = smooth_distance
                 smooth = smooth_distance
             elif key == 'extinction':
-                new_result['extinction_smooth'] = smooth_extinction,
+                new_result['extinction_smooth'] = smooth_extinction
                 smooth = smooth_extinction
             elif key == 'distance' or key == 'parallax':
                 smooth = 0.2 * np.log(10.) * smooth_distance
@@ -658,7 +682,7 @@ class UniDAMTool(object):
                                                 xdata[:, self.w_column],
                                                 smooth))
         if self.dump_pdf and 'age' in self.fitted_columns:
-            self.add_to_pdf(xdata, mode_weight)
+            self.add_to_pdf(xdata, new_result['uspdf_weight'])
         if len(xdata) > 3 and 'distance_modulus' in self.fitted_columns:
             if 'age' in self.fitted_columns:
                 new_result.update(self.get_correlations('distance_modulus',
@@ -743,8 +767,7 @@ def get_table(idtype=str, fitted_columns={}):
     def float_column(unit=None):
         if unit is None:
             return Column(dtype=float)
-        else:
-            return Column(dtype=float, unit=unit)
+        return Column(dtype=float, unit=unit)
 
     columns = OrderedDict([
         ('id', Column(dtype=idtype)),

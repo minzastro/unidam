@@ -613,7 +613,7 @@ class UniDAMTool(object):
         SED is calculated as a weighted mean (with scatter) for predicted
         visible magnitudes.
         """
-        mdata = mf.models[np.asarray(adata[:, self.w_column + 1], dtype=int)]
+        mdata = mf.models[np.asarray(adata[:, self.w_column + 1] - 1, dtype=int)]
         dm = adata[:, self.fitted_columns.keys().index('distance_modulus')]
         ext = adata[:, self.fitted_columns.keys().index('extinction')]
         weight = adata[:, self.w_column]

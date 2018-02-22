@@ -1,6 +1,7 @@
 module model_fitter
 !! Fortran module of the UniDAM.
 !! Equations referred to are from Mints and Hekker (2017).
+use Solve_NonLin
 implicit none
 
 !> All models
@@ -148,12 +149,35 @@ real function mu_d_function(mud, vector)
   real, intent(in) :: mud
   real, intent(in) :: vector(2)
   real Ak_local, pi
+  integer iter
+  logical bFlag
       pi = 10**(-0.2 * mud - 1.)
+      iter = 0
+      bFlag = .false.
       Ak_local = ((extinction / extinction_error**2) + vector(2) - &
-                   sum(Ck * mud * mag_err)) / (sum(Ck * Ck * mag_err) + (1/extinction_error**2))
+                  sum(Ck * mud * mag_err)) / (sum(Ck * Ck * mag_err) + (1/extinction_error**2))
+      do while (iter.le.5)
+        if (((Ak_local.ge.extinction).and.(bFlag)) .or. &
+            ((Ak_local.lt.extinction).and.(.not.bFlag))) then
+            exit
+        endif
+        if (Ak_local.ge.extinction) then
+          Ak_local = ((extinction / extinction_error**2) + vector(2) - &
+                      sum(Ck * mud * mag_err)) / (sum(Ck * Ck * mag_err) + (1/extinction_error**2))
+          bFlag = .true.
+        else
+          Ak_local = (vector(2) - sum(Ck * mud * mag_err)) / (sum(Ck * Ck * mag_err))
+          bFlag = .false.
+        endif
+        iter = iter + 1
+      enddo
+      if (iter.gt.4) then
+        write(*, *) 'Warning!'
+      endif
       mu_d_function = 0.2 * log(10.) * (2. + pi * (pi - parallax)/ parallax_error**2) + &
         vector(1) - sum((Ak_local * Ck + mud) * mag_err)
 end function mu_d_function
+
 
 subroutine solve_for_distance_with_parallax(vector, solution)
   !! Solving the system of equations for distance modulus
@@ -164,34 +188,33 @@ subroutine solve_for_distance_with_parallax(vector, solution)
   real, intent(inout) :: solution(2)
   real Ak_old, mu_old
   real Ak_new, mu
-  real mu_1, mu_2, fun_1, fun_2
+  real mu_1, mu_2, fun_1, fun_2, rrr(2)
   integer iterations
-    mu_1 = -5 * (1. + log10(parallax + 10.*parallax_error))
-    if (parallax .gt. 10.*parallax_error) then
-        mu_2 = -5 * (1. + log10(parallax - 10.*parallax_error))
-    else
-        mu_2 = -5 * (1. + log10(parallax)) - 5.
-    endif
-    iterations = 0
-    do while ((iterations .le. 100) .and. (abs(mu_2 - mu_1) .gt. 1e-6))
-      fun_1 = mu_d_function(mu_1, vector)
-      fun_2 = mu_d_function(mu_2, vector)
-      if (fun_1 * fun_2 .le. 0) then
-        if (abs(fun_1) .gt. abs(fun_2)) then
-          mu_1 = mu_1 + 0.5 * (mu_2 - mu_1)
-        else
-          mu_2 = mu_2 - 0.5 * (mu_2 - mu_1)
-        endif
-      else if (abs(fun_1) .gt. abs(fun_2)) then
-        mu_1 = mu_2 + 2.5*(mu_2 - mu_1)
-      else
-        mu_2 = mu_1 + 2.5*(mu_1 - mu_2)
-      endif
-      iterations = iterations + 1
-    enddo
-    solution(1) = mu_1
-    solution(2) = ((extinction / extinction_error**2) + vector(2) - &
-                  sum(Ck * mu_1 * mag_err)) / (sum(Ck * Ck * mag_err) + (1/extinction_error**2))
+   integer :: info,i
+   real :: tol=1e-8
+   real, dimension(2) :: x,fvec,diag
+    call hbrd(fcnx, 2, solution, fvec, epsilon(tol), tol, info, diag)
+    return
+
+    contains
+    SUBROUTINE FCNX(N, X, FVEC, IFLAG)
+        IMPLICIT NONE
+        INTEGER, INTENT(IN)      :: n
+        REAL, INTENT(IN)    :: x(n)
+        REAL, INTENT(OUT)   :: fvec(n)
+        INTEGER, INTENT(IN OUT)  :: iflag
+        real extra, pi
+          pi = 10**(-0.2 * x(1) - 1.)
+          if (X(2) .ge. extinction) then
+            extra = (X(2) - extinction) / extinction_error**2
+          else
+            extra = 0
+          endif
+          FVEC(1) = -vector(1) + sum(Ck * X(2) * mag_err) + &
+            sum(X(1) * mag_err) - 0.2 * log(10.) * (2. + pi * (pi - parallax)/ parallax_error**2)
+          FVEC(2) = -vector(2) + sum(Ck * Ck * X(2) * mag_err) + sum(Ck * X(1) * mag_err) + extra
+          !write(77, *) vector, pi, extra, x, fvec
+    END SUBROUTINE FCNX
 end subroutine solve_for_distance_with_parallax
 
 
@@ -294,8 +317,10 @@ subroutine find_best(m_count)
         endif
         ! Unweighted isochrone likelihood
         if (parallax_known) then
-            L_sed = L_sed + 0.5 * (mu_d(2) - extinction)**2 / (extinction_error**2) + &
-                            0.5 * (1. / distance - parallax)**2 / (parallax_error**2)
+            L_sed = L_sed + 0.5 * (1. / distance - parallax)**2 / (parallax_error**2)
+            if (mu_d(2) .ge. extinction) then
+                L_sed = L_sed + 0.5 * (mu_d(2) - extinction)**2 / (extinction_error**2)
+            endif
         endif
         model_params(m_count, prob) = L_model
         ! SED likelihood
@@ -310,7 +335,7 @@ subroutine find_best(m_count)
           if (debug) then
             write(68, *) models(i, model_columns), models(i, abs_mag), &
                          'Mag:', mag - models(i, abs_mag), &
-                         'Fit:', model_params(m_count, 1:off), L_model, L_sed, p
+                         'Fit:', model_params(m_count, 1:off), L_model, L_sed, p, i
           endif
           mask_models(i) = .false.
           cycle
@@ -328,7 +353,7 @@ subroutine find_best(m_count)
         if (debug) then
           write(66, *) models(i, model_column_count), models(i, abs_mag), &
                        models(i, model_columns), models(i, model_column_count-1), -99, &
-                       model_params(m_count, 1:prob+2), mag - models(i, abs_mag), L_model, L_sed, p
+                       model_params(m_count, 1:prob+2), mag - models(i, abs_mag), L_model, L_sed, p, i
         endif
         m_count = m_count + 1
       endif

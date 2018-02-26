@@ -25,7 +25,7 @@ if args.input is None:
     ids = []
     for arg in args.rest:
         ids += arg.split(',')
-else:    
+else:
     ids = args.input.split(',')
 for id in ids:
     print(id)

@@ -39,7 +39,12 @@ def get_splitted(config, name):
     """
     Get array from config.
     """
-    return config.get('general', name).split(',')
+    if not config.has_option('general', name):
+        return []
+    elif not config.get('general', name):
+        return []
+    else:
+        return config.get('general', name).split(',')
 
 
 class UniDAMTool(object):
@@ -95,6 +100,7 @@ class UniDAMTool(object):
         for key, value in self.DEFAULTS.iteritems():
             if not config.has_option('general', key):
                 config.set('general', key, str(value))
+        self.keep_columns = get_splitted(config, 'keep_columns')
         self.fitted_columns = get_splitted(config, 'fitted_columns')
         for item in self.SPECIAL:
             move_to_end(self.fitted_columns, item)
@@ -292,6 +298,8 @@ class UniDAMTool(object):
         for item in result:
             item.update({'total_uspdfs': len(result),
                          'id': row[self.id_column]})
+            for keep in self.keep_columns:
+                item[keep] = row[keep]
         # Sort by priority
         result.sort(key=lambda x: x['uspdf_priority'])
         result = self.assign_quality(result)
@@ -751,68 +759,69 @@ class UniDAMTool(object):
                   open('dump/dump_%s.json' % idstr, 'w'),
                   indent=2, cls=NumpyAwareJSONEncoder)
 
+    def get_table(self, data, idtype=str):
+        """
+        Prepare output table object.
+        """
+        ucd = {'age': 'time.age',
+               'mass': 'phys.mass',
+               'distance': 'pos.distance',
+               'distance_modulus': 'phot.mag.distMod',
+               'T': 'phys.temperature',
+               'parallax': 'pos.parallax',
+               'extinction': 'phys.absorption.gal'}
 
-def get_table(idtype=str, fitted_columns={}):
-    """
-    Prepare output table object.
-    """
-    ucd = {'age': 'time.age',
-           'mass': 'phys.mass',
-           'distance': 'pos.distance',
-           'distance_modulus': 'phot.mag.distMod',
-           'T': 'phys.temperature',
-           'parallax': 'pos.parallax',
-           'extinction': 'phys.absorption.gal'}
+        def float_column(unit=None):
+            if unit is None:
+                return Column(dtype=float)
+            return Column(dtype=float, unit=unit)
 
-    def float_column(unit=None):
-        if unit is None:
-            return Column(dtype=float)
-        return Column(dtype=float, unit=unit)
-
-    columns = OrderedDict([
-        ('id', Column(dtype=idtype)),
-        ('uspdf_priority', Column(dtype=int)),
-        ('uspdf_points', Column(dtype=int)),
-        ('stage', Column(dtype=int)),
-        ('uspdf_weight', float_column()),
-        ('total_uspdfs', Column(dtype=int)),
-        ('quality', Column(dtype='S1')),
-        ('p_best', float_column()),
-        ('p_sed', float_column())])
-    final = Table()
-    for key, value in columns.iteritems():
-        final[key] = value
-    units = {'age': 'Gyr', 'mass': 'MSun',
-             'distance_modulus': 'mag',
-             'extinction': 'mag',
-             'distance': 'kpc',
-             'T': 'K',
-             'parallax': 'mas'}
-    for key in fitted_columns.iterkeys():
-        if key in ['stage']:
-            continue
-        if key in units:
-            unit = units[key]
-            meta = ucd[key]
-        else:
-            unit, meta = '', ''
-        for suffix in ['_mean', '_err', '_mode', '_median',
-                       '_low_1sigma', '_up_1sigma',
-                       '_low_3sigma', '_up_3sigma']:
-            final['%s%s' % (key, suffix)] = float_column(unit=unit)
-        final['%s_mean' % key].meta['ucd'] = meta
-        final['%s_fit' % key] = Column(dtype='S1')
-        final['%s_par' % key] = Column(dtype=float, shape=(5))
-    if 'distance_modulus' in fitted_columns:
-        for key in ['dm_age', 'age_dm', 'dm_mass']:
-            final['%s_slope' % key] = float_column()
-            final['%s_intercept' % key] = float_column()
-            final['%s_scatter' % key] = float_column()
-            final['%s_mad' % key] = float_column()
-        final['distance_modulus_smooth'] = float_column(unit='mag')
-    if 'extinction' in fitted_columns:
-        final['extinction_smooth'] = float_column(unit='mag')
-        final['extinction_zero'] = float_column(unit='fraction')
-    return final
+        columns = OrderedDict([
+            ('id', Column(dtype=idtype)),
+            ('uspdf_priority', Column(dtype=int)),
+            ('uspdf_points', Column(dtype=int)),
+            ('stage', Column(dtype=int)),
+            ('uspdf_weight', float_column()),
+            ('total_uspdfs', Column(dtype=int)),
+            ('quality', Column(dtype='S1')),
+            ('p_best', float_column()),
+            ('p_sed', float_column())])
+        final = Table()
+        for key, value in columns.iteritems():
+            final[key] = value
+        units = {'age': 'Gyr', 'mass': 'MSun',
+                 'distance_modulus': 'mag',
+                 'extinction': 'mag',
+                 'distance': 'kpc',
+                 'T': 'K',
+                 'parallax': 'mas'}
+        for key in self.fitted_columns.iterkeys():
+            if key in ['stage']:
+                continue
+            if key in units:
+                unit = units[key]
+                meta = ucd[key]
+            else:
+                unit, meta = '', ''
+            for suffix in ['_mean', '_err', '_mode', '_median',
+                           '_low_1sigma', '_up_1sigma',
+                           '_low_3sigma', '_up_3sigma']:
+                final['%s%s' % (key, suffix)] = float_column(unit=unit)
+            final['%s_mean' % key].meta['ucd'] = meta
+            final['%s_fit' % key] = Column(dtype='S1')
+            final['%s_par' % key] = Column(dtype=float, shape=(5))
+        if 'distance_modulus' in self.fitted_columns:
+            for key in ['dm_age', 'age_dm', 'dm_mass']:
+                final['%s_slope' % key] = float_column()
+                final['%s_intercept' % key] = float_column()
+                final['%s_scatter' % key] = float_column()
+                final['%s_mad' % key] = float_column()
+            final['distance_modulus_smooth'] = float_column(unit='mag')
+        if 'extinction' in self.fitted_columns:
+            final['extinction_smooth'] = float_column(unit='mag')
+            final['extinction_zero'] = float_column(unit='fraction')
+        for keep in self.keep_columns:
+            final[keep] = Column(dtype=data[keep].dtype)
+        return final
 
 # DO NOT MAKE main() function here: will cause problems for parallel...

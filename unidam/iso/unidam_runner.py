@@ -16,7 +16,7 @@ import traceback
 import warnings
 from astropy.table import Table, Column
 from unidam.iso.model_fitter import model_fitter as mf
-from unidam.iso.unidam_main import UniDAMTool, get_table
+from unidam.iso.unidam_main import UniDAMTool
 from unidam.utils.constants import AGE_RANGE
 
 np.set_printoptions(linewidth=200)
@@ -47,7 +47,7 @@ de = UniDAMTool(config_filename=args.config)
 
 de.id_column = 'id'
 idtype = data.columns[de.id_column].dtype
-final = get_table(idtype, de.fitted_columns)
+final = de.get_table(data, idtype)
 unfitted = Table()
 unfitted['id'] = Column(dtype=idtype)
 unfitted['error'] = Column(dtype='S100')

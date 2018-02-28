@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
+Module for truncated line distribution.
 Created on Thu Aug 31 17:55:10 2017
 
 @author: mints

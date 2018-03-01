@@ -1,19 +1,21 @@
 from __future__ import print_function
-import numpy as np
 import warnings
+import numpy as np
 from scipy.stats import norm, truncnorm
 from scipy.optimize import curve_fit
 try:
     import skewnorm_boost
+
     def skew_gauss(x, mu, sigma, alpha):
         """
         Skewed Gaussian distribution.
         """
-        sn = skewnorm_boost.SkewNorm(mu, sigma, alpha)
-        result = np.array([sn.pdf(xx) for xx in x])
+        skewn = skewnorm_boost.SkewNorm(mu, sigma, alpha)
+        result = np.array([skewn.pdf(xx) for xx in x])
         return result
 except ImportError:
     from unidam.utils.skewnorm_local import skewnorm_local as sn
+
     def skew_gauss(x, mu, sigma, alpha):
         """
         Skewed Gaussian distribution.
@@ -23,12 +25,15 @@ except ImportError:
 
 try:
     import studentst_boost
+
     def t_student(x, mu, sigma, df):
-        sn = studentst_boost.StudentsT(mu, np.abs(sigma), np.abs(df))
-        result = np.array([sn.pdf(xx) for xx in x])
+        student = studentst_boost.StudentsT(mu, np.abs(sigma),
+                                            np.abs(df))
+        result = np.array([student.pdf(xx) for xx in x])
         return result / (result.sum() * (x[1] - x[0]))
 except ImportError:
     from scipy.stats import t
+
     def t_student(x, mu, sigma, df):
         result = t.pdf(x, np.abs(df), mu, np.abs(sigma))
         return result / (result.sum() * (x[1] - x[0]))
@@ -203,8 +208,7 @@ def do_fit_trunc(xdata, ydata, func, p0, minmax):
 
 def do_fit_student(xdata, ydata, p0):
     try:
-        popt, pcov = curve_fit(t_student, xdata, ydata, p0,
-                               ftol=1e-5)
+        popt, _ = curve_fit(t_student, xdata, ydata, p0, ftol=1e-5)
         return [popt, kl_divergence(xdata, t_student, popt, ydata)]
     except (RuntimeError, TypeError):
         # Error while fitting
@@ -244,11 +248,11 @@ def find_best_fit(xdata, ydata, mu0, sigma0, return_all=False):
     xstep_left = xdata[1] - xdata[0]
     xstep_right = xdata[-1] - xdata[-2]
     xxdata = np.concatenate((
-            np.arange(xdata[0] - xstep_left * 10,
-                      xdata[0] - xstep_left * 0.5, xstep_left),
-            xdata,
-            np.arange(xdata[-1] + xstep_right,
-                      xdata[-1] + xstep_right * 10.5, xstep_right)
+        np.arange(xdata[0] - xstep_left * 10,
+                  xdata[0] - xstep_left * 0.5, xstep_left),
+        xdata,
+        np.arange(xdata[-1] + xstep_right,
+                  xdata[-1] + xstep_right * 10.5, xstep_right)
         ))
     yydata = np.zeros_like(xxdata)
     yydata[10:-10] = ydata
@@ -272,7 +276,9 @@ def find_best_fit(xdata, ydata, mu0, sigma0, return_all=False):
             fits['P'][1] = 1e11
         fits['T'] = do_fit_trunc(xxdata, yydata, tgauss, (mu0, sigma0),
                                  (lower, upper))
-        if (fits['L'][0][0] < upper and fits['L'][0][0]> lower) or fits['L'][1] > 1e9:
+        if (fits['L'][0][0] < upper and
+            fits['L'][0][0] > lower) or \
+                fits['L'][1] > 1e9:
             # Skipping Gaussian (for now)
             # fits['G'] = do_fit(xxdata, yydata, gauss, (mu0, sigma0))
             # if fits['G'][0][0] < lower or fits['G'][0][0] > upper:

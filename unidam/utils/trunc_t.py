@@ -1,10 +1,3 @@
-"""An implementation of the skew-t and skew-normal distributions for SciPy"""
-
-# TODO: Implement skew-t
-
-# Copyright (c) 2012 Oliver M. Haynold
-# All rights reserved.
-
 import numpy as np
 from scipy.stats import t, rv_continuous
 

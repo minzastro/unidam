@@ -37,4 +37,16 @@ class MathTest(unittest.TestCase):
         v = np.arange(20)
         w = np.ones(20)
         w[:10] = 2.
-        assert_equal(mathematics.bin_estimate(v)[1], 2)
+        assert_equal(mathematics.bin_estimate(v)[1], 3)
+
+    def test_move_to_end(self):
+        a = [1, 2, 3, 4, 5]
+        mathematics.move_to_end(a, 3)
+        self.assertEqual(a, [1, 2, 4, 5, 3])
+        a = [1, 2, 3, 4, 5]
+        mathematics.move_to_end(a, 0)
+        self.assertEqual(a, [1, 2, 3, 4, 5])
+        a = [1, 2, 3, 3, 4, 5]
+        mathematics.move_to_end(a, 3)
+        self.assertEqual(a, [1, 2, 3, 4, 5, 3])
+        

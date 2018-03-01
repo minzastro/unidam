@@ -1,5 +1,7 @@
 import numpy as np
-
+import sys
+if sys.version_info[0] == 3:
+    xrange = range
 
 def to_bins(arr):
     """

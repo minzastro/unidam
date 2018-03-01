@@ -290,7 +290,6 @@ def find_best_fit(xdata, ydata, mu0, sigma0, return_all=False):
         if value[1] < best_value:
             best = key
             best_value = value[1]
-        # print(key, value)
         if key in 'TL':
             # We have to include limits for a truncated Gaussian
             fits[key][0] = np.insert(fits[key][0], 2, [lower, upper])

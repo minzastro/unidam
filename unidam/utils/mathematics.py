@@ -58,7 +58,7 @@ def bin_estimate(data, weights=None):
     in histogram.
     """
     if weights is None:
-        weights = np.ones_line(data)
+        weights = np.ones_like(data)
     q25 = quantile(data, weights, 0.25)
     q75 = quantile(data, weights, 0.75)
     width = 2. * (q75 - q25) * np.power(len(weights), -1./3.)

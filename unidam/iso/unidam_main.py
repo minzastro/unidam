@@ -2,7 +2,7 @@
 import os
 import warnings
 from collections import OrderedDict
-from ConfigParser import ConfigParser
+from configparser import ConfigParser
 import numpy as np
 import simplejson as json
 from astropy.table import Table, Column
@@ -97,7 +97,7 @@ class UniDAMTool(object):
         if not os.path.exists(config_filename):
             raise Exception('Config file %s not found' % config_filename)
         config.read(config_filename)
-        for key, value in self.DEFAULTS.iteritems():
+        for key, value in self.DEFAULTS.items():
             if not config.has_option('general', key):
                 config.set('general', key, str(value))
         self.keep_columns = get_splitted(config, 'keep_columns')
@@ -196,15 +196,15 @@ class UniDAMTool(object):
         Check if the row is good for processing.
         """
         if np.isnan(self.param).any():
-            print('No spectral params for %s' % row_id)
+            print(('No spectral params for %s' % row_id))
             return {'id': row_id,
                     'error': 'No spectral params'}
         if np.any(self.param < -100.) or np.any(self.param_err <= 0):
-            print('No spectral params or invalid params for %s' % row_id)
+            print(('No spectral params or invalid params for %s' % row_id))
             return {'id': row_id,
                     'error': 'No spectral params or invalid params'}
         if self.mag.size == 0:
-            print('No photometry for %s' % row_id)
+            print(('No photometry for %s' % row_id))
             return {'id': row_id,
                     'error': 'No photometry'}
         return None
@@ -229,8 +229,8 @@ class UniDAMTool(object):
         mf.alloc_mag(self.mag, self.mag_err, self.Rk)
         mf.alloc_param(self.param, self.param_err)
         # Collect model-file column indices of fitted columns
-        fitted = [item for item in self.fitted_columns.values() if item >= 0]
-        mf.alloc_settings(self.abs_mag, self.model_columns.values(),
+        fitted = [item for item in list(self.fitted_columns.values()) if item >= 0]
+        mf.alloc_settings(self.abs_mag, list(self.model_columns.values()),
                           fitted)
         if mf.parallax_known:
             mf.parallax = row[self.config['parallax']]
@@ -254,7 +254,7 @@ class UniDAMTool(object):
         m_count = mf.find_best()
         # Now deal with the result:
         if m_count == 0:
-            print('No model fitting for %s' % row[self.id_column])
+            print(('No model fitting for %s' % row[self.id_column]))
             return {'id': row[self.id_column],
                     'error': 'No model fitting'}
         model_params = mf.model_params[:m_count]
@@ -267,13 +267,13 @@ class UniDAMTool(object):
         total_mode_weight = np.sum(mode_weight)
         if total_mode_weight == 0.:
             # Does this ever work?
-            print('No model fitting (test) for %s' % row[self.id_column])
+            print(('No model fitting (test) for %s' % row[self.id_column]))
             return {'id': row[self.id_column],
                     'error': 'No model fitting'}
         try:
             mode_weight = mode_weight / total_mode_weight
         except ZeroDivisionError:
-            print('Zero weight for %s' % row[self.id_column])
+            print(('Zero weight for %s' % row[self.id_column]))
             return {'id': row[self.id_column],
                     'error': 'Zero weight'}
         # Setting best stage
@@ -322,7 +322,7 @@ class UniDAMTool(object):
         Prepare magnitudes and spectral parameters
         for a given row.
         """
-        self.mag_names = np.array(self.default_bands.keys(), dtype=str)
+        self.mag_names = np.array(list(self.default_bands.keys()), dtype=str)
         self.mag = np.zeros(len(self.mag_names))
         self.mag_err = np.zeros(len(self.mag_names))
         for iband, band in enumerate(self.mag_names):
@@ -331,7 +331,7 @@ class UniDAMTool(object):
             # for computational efficiency.
             self.mag_err[iband] = 1. / (row['e_%smag' % band])**2
         self.Rk = np.array([self.RK[band] for band in self.mag_names])
-        self.abs_mag = np.array(self.default_bands.values(), dtype=int)
+        self.abs_mag = np.array(list(self.default_bands.values()), dtype=int)
         # Filter out bad data:
         self._apply_mask(~(np.isnan(self.mag_err) + np.isnan(self.mag)))
         self.param = np.array([row[name] for name in self.model_columns])
@@ -348,7 +348,7 @@ class UniDAMTool(object):
             # We cannot fit in mass, if mass is not fitted for
             yield stage_data
             return
-        mass_column = self.fitted_columns.keys().index('mass')
+        mass_column = list(self.fitted_columns.keys()).index('mass')
         # Make a histogram in log-masses
         xbins = np.logspace(np.log10(stage_data[:, mass_column].min() * 0.9),
                             np.log10(stage_data[:, mass_column].max() + 0.5),
@@ -386,7 +386,7 @@ class UniDAMTool(object):
             #  We cannot split in parameter than is not fitted for.
             yield stage_data
             return
-        split_column = self.fitted_columns.keys().index(param)
+        split_column = list(self.fitted_columns.keys()).index(param)
         if param == 'age':
             xbins = to_bins(self.age_grid)
             max_order = 10
@@ -556,7 +556,7 @@ class UniDAMTool(object):
             if result['_low_3sigma'] < 0.:
                 result['_low_3sigma'] = 0.
         return {'%s%s' % (name, key): value
-                for (key, value) in result.iteritems()}
+                for (key, value) in result.items()}
 
     def get_correlations(self, first_parameter, second_parameter, adata):
         """
@@ -564,8 +564,8 @@ class UniDAMTool(object):
         and distance modulus.
         Use a linear fit, report slope, intercept and scatter.
         """
-        dm_column = self.fitted_columns.keys().index(first_parameter)
-        second_column = self.fitted_columns.keys().index(second_parameter)
+        dm_column = list(self.fitted_columns.keys()).index(first_parameter)
+        second_column = list(self.fitted_columns.keys()).index(second_parameter)
         xdata = adata[:, dm_column]
         if second_parameter == 'mass':
             # Log-mass used, as it has linear relation to mu
@@ -597,7 +597,7 @@ class UniDAMTool(object):
         """
         Collecting total PDFs in age and age-distance modulus.
         """
-        age_col = self.fitted_columns.keys().index('age')
+        age_col = list(self.fitted_columns.keys()).index('age')
         age_histogram = np.histogram(xdata[:, age_col],
                                      to_bins(constants.AGE_RANGE),
                                      weights=xdata[:, self.w_column],
@@ -606,7 +606,7 @@ class UniDAMTool(object):
         age_histogram[np.isnan(age_histogram)] = 0.
         self.total_age_pdf += age_histogram
         if 'distance_modulus' in self.fitted_columns:
-            dm_col = self.fitted_columns.keys().index('distance_modulus')
+            dm_col = list(self.fitted_columns.keys()).index('distance_modulus')
             two_histogram = np.histogram2d(
                 xdata[:, dm_col], xdata[:, age_col],
                 (to_bins(constants.DM_RANGE), to_bins(constants.AGE_RANGE)),
@@ -622,8 +622,8 @@ class UniDAMTool(object):
         visible magnitudes.
         """
         mdata = mf.models[np.asarray(adata[:, self.w_column + 1] - 1, dtype=int)]
-        dm = adata[:, self.fitted_columns.keys().index('distance_modulus')]
-        ext = adata[:, self.fitted_columns.keys().index('extinction')]
+        dm = adata[:, list(self.fitted_columns.keys()).index('distance_modulus')]
+        ext = adata[:, list(self.fitted_columns.keys()).index('extinction')]
         weight = adata[:, self.w_column]
         sed_dict = {'Predicted': {}, 'PredErr': {},
                     'Observed': {}, 'ObsErr': {}}
@@ -750,8 +750,8 @@ class UniDAMTool(object):
         Save results into a dat/json files.
         """
         idstr = str(row[self.id_column]).strip()
-        dump_array = range(self.w_column + 1)
-        header = '%s L_iso L_sed p_w' % ' '.join(self.fitted_columns.keys())
+        dump_array = list(range(self.w_column + 1))
+        header = '%s L_iso L_sed p_w' % ' '.join(list(self.fitted_columns.keys()))
         np.savetxt('dump/dump_%s.dat' % idstr,
                    model_params[:, dump_array],
                    header=header)
@@ -787,7 +787,7 @@ class UniDAMTool(object):
             ('p_best', float_column()),
             ('p_sed', float_column())])
         final = Table()
-        for key, value in columns.iteritems():
+        for key, value in columns.items():
             final[key] = value
         units = {'age': 'Gyr', 'mass': 'MSun',
                  'distance_modulus': 'mag',
@@ -795,7 +795,7 @@ class UniDAMTool(object):
                  'distance': 'kpc',
                  'T': 'K',
                  'parallax': 'mas'}
-        for key in self.fitted_columns.iterkeys():
+        for key in self.fitted_columns.keys():
             if key in ['stage']:
                 continue
             if key in units:

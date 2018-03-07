@@ -62,7 +62,7 @@ if args.id is not None:
     else:
         mask = [j in np.asarray(ids, dtype=idtype) for j in data[de.id_column]]
     data = data[np.where(mask)]
-    print data
+    print(data)
 
 if args.parallel:
     mf.debug = False
@@ -95,7 +95,7 @@ if args.parallel:
 
     pool = mp.Pool(pool_size)
     pool_result = pool.map(run_single, np.array_split(data, pool_size))
-    pool_result, des, bads = zip(*pool_result)
+    pool_result, des, bads = list(zip(*pool_result))
     final = vstack(pool_result)
     unfitted = vstack(bads)
     if de.dump_pdf:
@@ -118,7 +118,7 @@ else:
         mf.debug = False
     i = 0
     for xrow in data:
-        print xrow[de.id_column]
+        print(xrow[de.id_column])
         #with warnings.catch_warnings():
         #    warnings.filterwarnings("error")
         result = de.get_estimates(xrow, dump=args.dump_results)
@@ -128,9 +128,9 @@ else:
             unfitted.add_row(result)
             continue
         for new_row in result:
-            for k in new_row.keys():
+            for k in list(new_row.keys()):
                 if k not in final.colnames:
-                    print '%s not in columns' % k
+                    print('%s not in columns' % k)
             final.add_row(new_row)
         i += 1
     if de.dump_pdf:

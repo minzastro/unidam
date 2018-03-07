@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 import warnings
 import numpy as np
 from scipy.stats import norm, truncnorm
@@ -292,7 +292,7 @@ def find_best_fit(xdata, ydata, mu0, sigma0, return_all=False):
                 fits['S'][1] = 1e11
     best = '-'
     best_value = 1e20
-    for key, value in fits.iteritems():
+    for key, value in fits.items():
         if value[1] < best_value:
             best = key
             best_value = value[1]

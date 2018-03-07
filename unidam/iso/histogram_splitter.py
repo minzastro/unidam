@@ -54,7 +54,7 @@ def histogram_splitter(hist, bins, min_order=2, max_order=3, dip_depth=0.75,
     # Select only maxima bigger than 0.01 of the main maximum
     # ...removed, to get rid of "bad" fits.
     # maximums = maximums[:, maximums[0] > 0.01*hist.max()]
-    for imax in xrange(maximums.shape[1] - 1):
+    for imax in range(maximums.shape[1] - 1):
         # Get list of minimums between this and next maximum
         between = minimums[:,
                            (minimums[1] > maximums[1, imax]) *

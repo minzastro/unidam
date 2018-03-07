@@ -14,7 +14,7 @@ EXTINCTION_FILENAME = 'extinction_data/lambda_sfd_ebv.fits'
 
 
 def _download(url, filename):
-    from urllib2 import urlopen  # Python 2
+    from urllib.request import urlopen  # Python 2
     #from urllib.request import urlopen # Python 3
     response = urlopen(url)
     CHUNK = 16 * 1024

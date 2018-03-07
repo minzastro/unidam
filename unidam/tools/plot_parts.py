@@ -20,7 +20,7 @@ def get_ydata(name, row, binx):
         func, par = get_param(row['%s_fit' % name], row['%s_par' % name])
         ydata = func.pdf(binx, *par)
         if np.any(ydata) < 0:
-            print name, ydata
+            print(name, ydata)
     else:
         ydata = np.zeros_like(binx)
     return ydata

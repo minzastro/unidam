@@ -44,7 +44,7 @@ data = Table.read(args.input)
 config = ConfigObj(args.config)
 if 'keep' in config:
     data.keep_columns(config['keep'])
-for key, value in config['mapping'].items():
+for key, value in list(config['mapping'].items()):
     if value.startswith('!'):
         data.add_column(Column(name=key,
                                data=np.ones(len(data)) * float(value[1:])))

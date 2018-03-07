@@ -145,7 +145,7 @@ def plot_pdf(xid, fits, name, data, column, ax, each=False,
             else:
                 plt.legend()
         plt.tight_layout()
-        plt.savefig('dump/dump_%s%s.png' % (xid, name))
+        plt.savefig('../iso/dump/dump_%s%s.png' % (xid, name))
         plt.clf()
     return lines, labels
 
@@ -191,8 +191,8 @@ if __name__ == '__main__':
         plt.title(args.title)
 
     for xid in args.input.split(','):
-        data = np.loadtxt('dump/dump_%s.dat' % xid)
-        fits = json.load(open('dump/dump_%s.json' % xid, 'r'))
+        data = np.loadtxt('../iso/dump/dump_%s.dat' % xid)
+        fits = json.load(open('../iso/dump/dump_%s.json' % xid, 'r'))
         for ii, item in enumerate([PLOTS[name] for name in args.what]):
             if args.grid:
                 ax = plt.subplot(3, 1, ii + 1)
@@ -207,8 +207,8 @@ if __name__ == '__main__':
                 leg = plt.figlegend(lines, labels, loc=(0.05, 0.01),
                                     ncol=4, frameon=False)
                 fig.subplots_adjust(bottom=0.15)
-                fig.savefig('dump/dump_%s.png' % xid,
+                fig.savefig('../iso/dump/dump_%s.png' % xid,
                             bbox_extra_artists=(leg,), bbox_inches='tight')
             else:
-                fig.savefig('dump/dump_%s.png' % xid, bbox_inches='tight')
+                fig.savefig('../iso/dump/dump_%s.png' % xid, bbox_inches='tight')
             plt.clf()

@@ -144,40 +144,6 @@ subroutine solve_for_distance(vector, solution)
     solution(2) = -(vector(1)*matrix0(1,2) - vector(2)*matrix0(1,1))*matrix_det
 end subroutine solve_for_distance
 
-real function mu_d_function(mud, vector)
-  !! Internal function for [solve_for_distance_with_parallax]
-  real, intent(in) :: mud
-  real, intent(in) :: vector(2)
-  real Ak_local, pi
-  integer iter
-  logical bFlag
-      pi = 10**(-0.2 * mud - 1.)
-      iter = 0
-      bFlag = .false.
-      Ak_local = ((extinction / extinction_error**2) + vector(2) - &
-                  sum(Ck * mud * mag_err)) / (sum(Ck * Ck * mag_err) + (1/extinction_error**2))
-      do while (iter.le.5)
-        if (((Ak_local.ge.extinction).and.(bFlag)) .or. &
-            ((Ak_local.lt.extinction).and.(.not.bFlag))) then
-            exit
-        endif
-        if (Ak_local.ge.extinction) then
-          Ak_local = ((extinction / extinction_error**2) + vector(2) - &
-                      sum(Ck * mud * mag_err)) / (sum(Ck * Ck * mag_err) + (1/extinction_error**2))
-          bFlag = .true.
-        else
-          Ak_local = (vector(2) - sum(Ck * mud * mag_err)) / (sum(Ck * Ck * mag_err))
-          bFlag = .false.
-        endif
-        iter = iter + 1
-      enddo
-      if (iter.gt.4) then
-        write(*, *) 'Warning!'
-      endif
-      mu_d_function = 0.2 * log(10.) * (2. + pi * (pi - parallax)/ parallax_error**2) + &
-        vector(1) - sum((Ak_local * Ck + mud) * mag_err)
-end function mu_d_function
-
 
 subroutine solve_for_distance_with_parallax(vector, solution)
   !! Solving the system of equations for distance modulus
@@ -186,16 +152,12 @@ subroutine solve_for_distance_with_parallax(vector, solution)
   !! is needed here.
   real, intent(in) :: vector(2)
   real, intent(inout) :: solution(2)
-  real Ak_old, mu_old
-  real Ak_new, mu
-  real mu_1, mu_2, fun_1, fun_2, rrr(2)
   integer iterations
-   integer :: info,i
-   real :: tol=1e-8
-   real, dimension(2) :: x,fvec,diag
+  integer :: info, i
+  real :: tol=1e-8
+  real, dimension(2) :: x,fvec,diag
     call hbrd(fcnx, 2, solution, fvec, epsilon(tol), tol, info, diag)
     return
-
     contains
     SUBROUTINE FCNX(N, X, FVEC, IFLAG)
         IMPLICIT NONE
@@ -213,7 +175,6 @@ subroutine solve_for_distance_with_parallax(vector, solution)
           FVEC(1) = -vector(1) + sum(Ck * X(2) * mag_err) + &
             sum(X(1) * mag_err) - 0.2 * log(10.) * (2. + pi * (pi - parallax)/ parallax_error**2)
           FVEC(2) = -vector(2) + sum(Ck * Ck * X(2) * mag_err) + sum(Ck * X(1) * mag_err) + extra
-          !write(77, *) vector, pi, extra, x, fvec
     END SUBROUTINE FCNX
 end subroutine solve_for_distance_with_parallax
 

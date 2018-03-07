@@ -46,8 +46,11 @@ def quantile(data, weights, quantile=0.5):
     sorted_weights = weights[ind_sorted]
     # Compute the auxiliary arrays
     cum_weights = np.cumsum(sorted_weights)
-    # TODO: Check that the weights do not sum zero
-    num_data = (cum_weights - 0.5 * sorted_weights) / np.sum(sorted_weights)
+    if np.sum(sorted_weights) > 0:
+        num_data = (cum_weights - 0.5 * sorted_weights) / \
+            np.sum(sorted_weights)
+    else:
+        raise ValueError('Total weight is zero')
     # Get the value of the weighted median
     return np.interp(quantile, num_data, sorted_data)
 
@@ -93,5 +96,8 @@ def wstatistics(data, weights, moments=4):
 
 
 def move_to_end(arr, item):
+    """
+    Move item to the end of array (if present).
+    """
     if item in arr:
         arr.append(arr.pop(arr.index(item)))

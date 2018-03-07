@@ -1,7 +1,5 @@
 import numpy as np
-import sys
-if sys.version_info[0] == 3:
-    xrange = range
+
 
 def to_bins(arr):
     """
@@ -35,7 +33,7 @@ def min_count_bins(data, min_step, min_count, minimum=None, maximum=None):
     histogram, _ = np.histogram(data, bins)
     sub_sum = 0
     result = [bins[0]]
-    for i in xrange(len(histogram)):
+    for i in range(len(histogram)):
         sub_sum += histogram[i]
         if sub_sum > min_count:
             sub_sum = 0
@@ -57,14 +55,24 @@ def get_chi2(a, b):
 
 
 def get_mean_offset(a, b):
+    """
+    Mean relative (wrt b) offset between two arrays.
+    """
     off = np.abs(a - b)
     return np.sum(off) / b.sum()
 
 
 def kl_divergence(a, b, lowlim=1e-10):
+    """
+    Calculate KL divirgence of a and b.
+    Filter out elements lower than lowlim either in a or in b.
+    """
     mask = np.logical_and(b > lowlim, a > lowlim)
     return np.sum(a[mask] * np.log(a[mask] / b[mask]))
 
 
 def kl_divergence_symmetric(a, b, lowlim=1e-10):
+    """
+    Calculate symmetric KL-divirgence between a and b.
+    """
     return kl_divergence(a, b, lowlim) + kl_divergence(b, a, lowlim)

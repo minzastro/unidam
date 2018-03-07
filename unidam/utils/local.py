@@ -5,6 +5,7 @@ from unidam.studentst_boosted import studentst_boosted as studentst
 from unidam.utils.trunc_revexpon import trunc_revexpon
 from unidam.utils.trunc_line import TruncLine
 
+
 def get_param(fit, par):
     """
     Convert parameters from DB to distribution parameters.

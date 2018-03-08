@@ -8,6 +8,14 @@ Created on Fri May 20 13:09:00 2016
 Script to run distance estimator for various regimes from
 the command-line.
 """
+from __future__ import print_function
+from __future__ import unicode_literals
+from __future__ import division
+from __future__ import absolute_import
+from builtins import zip
+from builtins import int
+from future import standard_library
+standard_library.install_aliases()
 import numpy as np
 import argparse
 import os

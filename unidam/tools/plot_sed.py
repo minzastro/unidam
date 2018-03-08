@@ -5,6 +5,14 @@ Created on Mon Feb  5 15:19:43 2018
 
 @author: mints
 """
+from __future__ import print_function
+from __future__ import unicode_literals
+from __future__ import division
+from __future__ import absolute_import
+from builtins import open
+from builtins import int
+from future import standard_library
+standard_library.install_aliases()
 import argparse
 import simplejson as json
 import pylab as plt

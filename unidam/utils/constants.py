@@ -7,6 +7,12 @@ Created on Tue Apr 11 16:37:34 2017
 
 Some useful constants.
 """
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
 from numpy import arange
 # Extinctions references:
 # JHK (2MASS), W1-W2 (AllWISE), ugriz (SDSS): Yuan et al. 2013

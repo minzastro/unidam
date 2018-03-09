@@ -173,8 +173,10 @@ subroutine solve_for_distance_with_parallax(vector, solution)
             extra = 0
           endif
           FVEC(1) = -vector(1) + sum(Ck * X(2) * mag_err) + &
-            sum(X(1) * mag_err) - 0.2 * log(10.) * (2. + pi * (pi - parallax)/ parallax_error**2)
-          FVEC(2) = -vector(2) + sum(Ck * Ck * X(2) * mag_err) + sum(Ck * X(1) * mag_err) + extra
+            sum(X(1) * mag_err) - &
+            0.2 * log(10.) * (2. + pi * (pi - parallax)/ parallax_error**2)
+          FVEC(2) = -vector(2) + sum(Ck * Ck * X(2) * mag_err) + &
+            sum(Ck * X(1) * mag_err) + extra
     END SUBROUTINE FCNX
 end subroutine solve_for_distance_with_parallax
 

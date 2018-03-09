@@ -655,6 +655,7 @@ class UniDAMTool(object):
         if mf.parallax_known:
             hess_matrix = np.copy(self.mag_matrix)
             hess_matrix[0, 0] += 0.212 * mf.parallax**2 / mf.parallax_error**2
+            hess_matrix[1, 1] += 1./mf.extinction_error ** 2
             # Magic constant 0.212 is (0.2 log(10))**2
             covariance = np.linalg.inv(hess_matrix)
             smooth_distance = np.sqrt(covariance[0, 0])

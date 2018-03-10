@@ -448,7 +448,31 @@ class UniDAMTool(object):
             bins = np.linspace(m_min, m_max, bin_count)
         return bins
 
-    def process_mode(self, name, mode_data, weights, smooth=None):
+    def _get_histogram_two_parts(self, name, mode_data):
+        pass    
+
+    def _get_histogram(self, name, mode_data, weights, bins,
+                       smooth):
+        if name == 'age':
+            # For ages we always use a fixed grid.
+            bin_centers = self.age_grid
+        else:
+            bin_centers = 0.5 * (bins[1:] + bins[:-1])
+        hist = np.histogram(mode_data[mode_data > bins[0]], bins,
+                            weights=weights[mode_data > bins[0]])[0]
+        hist = hist / (hist.sum() * (bins[1:] - bins[:-1]))
+        if smooth is not None:
+            if name in ['distance_modulus', 'extinction']:
+                hist = gaussian_filter1d(
+                    hist,
+                    smooth / (bins[1] - bins[0]),
+                    mode='constant')
+            else:
+                hist = vargauss_filter1d(bin_centers, hist, smooth)
+        return hist, bin_centers
+        
+    def process_mode(self, name, mode_data, weights, smooth=None,
+                     extinction_data=None):
         """
         Produce PDF representation for a given value of the mode.
         """
@@ -467,9 +491,9 @@ class UniDAMTool(object):
             avg, err = wstatistics(mode_data, weights, 2)
             if smooth is not None:
                 if name in ['distance_modulus', 'extinction']:
-                    err = np.sqrt(err**2 + smooth**2)
+                    err = np.sqrt(err**2 + np.sum(smooth**2))
                 else:
-                    err = np.sqrt(err**2 + (avg * smooth)**2)
+                    err = np.sqrt(err**2 + np.sum((avg * smooth)**2))
             if err == 0.:
                 # This is done for the case of very low weights...
                 # I guess it should be done otherwise, but...
@@ -481,22 +505,26 @@ class UniDAMTool(object):
                 mode = avg
                 fit, par, kl_div = 'N', [], 1e10
             else:
-                if name == 'age':
-                    # For ages we always use a fixed grid.
-                    bin_centers = self.age_grid
+                if name in ['distance_modulus', 'extinction'] and \
+                    len(smooth) == 2:
+                    part1 = mode_data[extinction_data < mf.extinction]
+                    weight1 = weights[extinction_data < mf.extinction]
+                    part2 = mode_data[extinction_data >= mf.extinction]
+                    weight2 = weights[extinction_data >= mf.extinction]
+                    err = np.sqrt(err**2 - np.sum(smooth**2) +
+                                  (smooth[0]**2 * weight1.sum() +
+                                   smooth[1]**2 * weight2.sum()) / weights.sum())
+                    hist1, bin_centers = \
+                        self._get_histogram(name, part1,
+                                            weight1, bins, smooth[0])
+                    hist2, _ = \
+                        self._get_histogram(name, part2,
+                                            weight2, bins, smooth[1])
+                    hist = hist1 + hist2
                 else:
-                    bin_centers = 0.5 * (bins[1:] + bins[:-1])
-                hist = np.histogram(mode_data[mode_data > bins[0]], bins,
-                                    weights=weights[mode_data > bins[0]])[0]
-                hist = hist / (hist.sum() * (bins[1:] - bins[:-1]))
-                if smooth is not None:
-                    if name in ['distance_modulus', 'extinction']:
-                        hist = gaussian_filter1d(
-                            hist,
-                            smooth / (bins[1] - bins[0]),
-                            mode='constant')
-                    else:
-                        hist = vargauss_filter1d(bin_centers, hist, smooth)
+                    hist, bin_centers = \
+                        self._get_histogram(name, mode_data,
+                                            weights, bins, smooth)
                 mode = bin_centers[np.argmax(hist)]
                 if np.sum(hist > 0) < 4:
                     #  Less than 4 non-negative bins, impossible to fit.
@@ -515,6 +543,7 @@ class UniDAMTool(object):
                   '_fit': fit,
                  }
         if name == 'extinction':
+            # Todo: fix!
             result['_zero'] = mode_data[mode_data < m_min].shape[0] \
                 / float(mode_data.shape[0])
         if self.dump and bin_centers is not None:
@@ -655,12 +684,18 @@ class UniDAMTool(object):
         if mf.parallax_known:
             hess_matrix = np.copy(self.mag_matrix)
             hess_matrix[0, 0] += 0.212 * mf.parallax**2 / mf.parallax_error**2
-            hess_matrix[1, 1] += 1./mf.extinction_error ** 2
+            #hess_matrix[1, 1] += 1./mf.extinction_error ** 2
             # Magic constant 0.212 is (0.2 log(10))**2
             covariance = np.linalg.inv(hess_matrix)
-            smooth_distance = np.sqrt(covariance[0, 0])
-            smooth_extinction = np.sqrt(covariance[1, 1])
+            hess_matrix[1, 1] += 1./mf.extinction_error ** 2
+            covariance2 = np.linalg.inv(hess_matrix)
+            smooth_distance = [np.sqrt(covariance[0, 0]),
+                               np.sqrt(covariance2[0, 0])]
+            smooth_extinction = [np.sqrt(covariance[1, 1]),
+                                 np.sqrt(covariance2[1, 1])]
             dof += 2
+        smooth_distance = np.atleast_1d(smooth_distance)
+        smooth_extinction = np.atleast_1d(smooth_extinction)
         best_model = np.argmin(xdata[:, self.w_column - 1] +
                                xdata[:, self.w_column - 2])
         l_sed = xdata[best_model, self.w_column - 1]
@@ -674,22 +709,28 @@ class UniDAMTool(object):
         if self.dump:
             new_result['sed_debug'] = self.dump_sed(xdata)
         for ikey, key in enumerate(self.fitted_columns.keys()):
+            extinction_if_needed = None
             if key == 'stage':
                 continue
             elif key == 'distance_modulus':
-                new_result['distance_modulus_smooth'] = smooth_distance
+                new_result['distance_modulus_smooth'] = smooth_distance[0]
                 smooth = smooth_distance
+                if len(smooth) == 2:
+                    extinction_if_needed = xdata[:, self.fitted_columns.keys().index('extinction')]
             elif key == 'extinction':
-                new_result['extinction_smooth'] = smooth_extinction
+                new_result['extinction_smooth'] = smooth_extinction[0]
                 smooth = smooth_extinction
+                if len(smooth) == 2:
+                    extinction_if_needed = xdata[:, ikey]
             elif key == 'distance' or key == 'parallax':
-                smooth = 0.2 * np.log(10.) * smooth_distance
+                smooth = 0.2 * np.log(10.) * smooth_distance[0]
             else:
                 smooth = None
             new_result.update(self.process_mode(key,
                                                 xdata[:, ikey],
                                                 xdata[:, self.w_column],
-                                                smooth))
+                                                smooth,
+                                                extinction_if_needed))
         if self.dump_pdf and 'age' in self.fitted_columns:
             self.add_to_pdf(xdata, new_result['uspdf_weight'])
         if len(xdata) > 3 and 'distance_modulus' in self.fitted_columns:

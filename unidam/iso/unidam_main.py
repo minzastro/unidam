@@ -15,7 +15,7 @@ from unidam.utils.fit import find_best_fit
 from unidam.utils.mathematics import wstatistics, quantile, bin_estimate, \
                                      to_borders, move_to_end
 from unidam.utils.confidence import find_confidence, ONE_SIGMA, THREE_SIGMA
-from unidam.utils.stats import to_bins
+from unidam.utils.stats import to_bins, from_bins
 from unidam.utils import constants
 from unidam.utils.local import vargauss_filter1d
 
@@ -448,9 +448,6 @@ class UniDAMTool(object):
             bins = np.linspace(m_min, m_max, bin_count)
         return bins
 
-    def _get_histogram_two_parts(self, name, mode_data):
-        pass    
-
     def _get_histogram(self, name, mode_data, weights, bins,
                        smooth):
         if name == 'age':
@@ -511,16 +508,22 @@ class UniDAMTool(object):
                     weight1 = weights[extinction_data < mf.extinction]
                     part2 = mode_data[extinction_data >= mf.extinction]
                     weight2 = weights[extinction_data >= mf.extinction]
-                    err = np.sqrt(err**2 - np.sum(smooth**2) +
-                                  (smooth[0]**2 * weight1.sum() +
-                                   smooth[1]**2 * weight2.sum()) / weights.sum())
-                    hist1, bin_centers = \
+                    bin_left = bins.searchsorted(part1.min()) - 1
+                    if bin_left < 0:
+                        bin_left = 0
+                    bin_right = bins.searchsorted(part1.max()) + 1
+                    xbins = bins[bin_left:bin_right]
+                    bin_centers = from_bins(bins)
+                    hist = np.zeros_like(bin_centers)
+                    hist1, _ = \
                         self._get_histogram(name, part1,
-                                            weight1, bins, smooth[0])
+                                            weight1, xbins, smooth[0])
+                    hist[bin_left:bin_right - 1] = hist1
                     hist2, _ = \
                         self._get_histogram(name, part2,
                                             weight2, bins, smooth[1])
-                    hist = hist1 + hist2
+                    hist += hist2
+                    avg, err = wstatistics(bin_centers, hist, 2)
                 else:
                     hist, bin_centers = \
                         self._get_histogram(name, mode_data,

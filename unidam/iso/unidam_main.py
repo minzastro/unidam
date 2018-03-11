@@ -508,17 +508,19 @@ class UniDAMTool(object):
                     weight1 = weights[extinction_data < mf.extinction]
                     part2 = mode_data[extinction_data >= mf.extinction]
                     weight2 = weights[extinction_data >= mf.extinction]
-                    bin_left = bins.searchsorted(part1.min()) - 1
-                    if bin_left < 0:
-                        bin_left = 0
-                    bin_right = bins.searchsorted(part1.max()) + 1
-                    xbins = bins[bin_left:bin_right]
                     bin_centers = from_bins(bins)
                     hist = np.zeros_like(bin_centers)
-                    hist1, _ = \
-                        self._get_histogram(name, part1,
-                                            weight1, xbins, smooth[0])
-                    hist[bin_left:bin_right - 1] = hist1
+                    if len(part1) > 0:
+                        bin_left = bins.searchsorted(part1.min()) - 1
+                        if bin_left < 0:
+                            bin_left = 0
+                        bin_right = bins.searchsorted(part1.max()) + 1
+                        xbins = bins[bin_left:bin_right]
+                        hist1, _ = \
+                            self._get_histogram(name, part1,
+                                                weight1, xbins,
+                                                smooth[0])
+                        hist[bin_left:bin_right - 1] = hist1
                     hist2, _ = \
                         self._get_histogram(name, part2,
                                             weight2, bins, smooth[1])

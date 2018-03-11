@@ -544,7 +544,7 @@ class UniDAMTool(object):
                  }
         if name == 'extinction':
             # Todo: fix!
-            result['_zero'] = mode_data[mode_data < m_min].shape[0] \
+            result['_zero'] = 1. - mode_data[mode_data > 0.].shape[0] \
                 / float(mode_data.shape[0])
         if self.dump and bin_centers is not None:
             result.update({'_bins_debug': bin_centers,

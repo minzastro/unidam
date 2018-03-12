@@ -467,7 +467,36 @@ class UniDAMTool(object):
             else:
                 hist = vargauss_filter1d(bin_centers, hist, smooth)
         return hist, bin_centers
-        
+
+    def _get_histogram_parts(self, name, mode_data, weights, bins,
+                             extinction_data, smooth):
+        part1 = mode_data[extinction_data < mf.extinction]
+        weight1 = weights[extinction_data < mf.extinction]
+        bin_centers = from_bins(bins)
+        hist = np.zeros_like(bin_centers)
+        if len(part1) > 0:
+            bin_left = bins.searchsorted(part1.min()) - 1
+            if bin_left < 0:
+                bin_left = 0
+            bin_right = bins.searchsorted(part1.max()) + 1
+            if bin_right - bin_left == 1:
+                hist[bin_left] = weight1.sum()
+            else:
+                xbins = bins[bin_left:bin_right]
+                hist1, _ = \
+                    self._get_histogram(name, part1,
+                                        weight1, xbins,
+                                        smooth[0])
+                hist[bin_left:bin_right - 1] = hist1
+        part2 = mode_data[extinction_data >= mf.extinction]
+        weight2 = weights[extinction_data >= mf.extinction]
+        if len(part2) > 0:
+            hist2, _ = \
+                self._get_histogram(name, part2,
+                                    weight2, bins, smooth[1])
+            hist += hist2
+        return hist, bin_centers
+
     def process_mode(self, name, mode_data, weights, smooth=None,
                      extinction_data=None):
         """
@@ -504,27 +533,9 @@ class UniDAMTool(object):
             else:
                 if name in ['distance_modulus', 'extinction'] and \
                     len(smooth) == 2:
-                    part1 = mode_data[extinction_data < mf.extinction]
-                    weight1 = weights[extinction_data < mf.extinction]
-                    part2 = mode_data[extinction_data >= mf.extinction]
-                    weight2 = weights[extinction_data >= mf.extinction]
-                    bin_centers = from_bins(bins)
-                    hist = np.zeros_like(bin_centers)
-                    if len(part1) > 0:
-                        bin_left = bins.searchsorted(part1.min()) - 1
-                        if bin_left < 0:
-                            bin_left = 0
-                        bin_right = bins.searchsorted(part1.max()) + 1
-                        xbins = bins[bin_left:bin_right]
-                        hist1, _ = \
-                            self._get_histogram(name, part1,
-                                                weight1, xbins,
-                                                smooth[0])
-                        hist[bin_left:bin_right - 1] = hist1
-                    hist2, _ = \
-                        self._get_histogram(name, part2,
-                                            weight2, bins, smooth[1])
-                    hist += hist2
+                    hist, bin_centers = self._get_histogram_parts(
+                        name, mode_data, weights, bins,
+                        extinction_data, smooth)
                     avg, err = wstatistics(bin_centers, hist, 2)
                 else:
                     hist, bin_centers = \

@@ -75,23 +75,24 @@ if args.parallel:
         pool_size = 2
 
     def run_single(patch):
-        try:
-            des = deepcopy(de)
-            tbl = deepcopy(final)
-            bad = deepcopy(unfitted)
-            for xrow in patch:
+        des = deepcopy(de)
+        tbl = deepcopy(final)
+        bad = deepcopy(unfitted)
+        for xrow in patch:
+            try:
                 result = des.get_estimates(xrow, dump=False)
-                if result is None:
-                    continue
-                elif isinstance(result, dict):
-                    bad.add_row(result)
-                    continue
-                for new_row in result:
-                    tbl.add_row(new_row)
-            return tbl, des, bad
-        except:
-            # Put all exception text into an exception and raise that
-            raise Exception("".join(traceback.format_exception(*sys.exc_info())))
+            except:
+                # Put all exception text into an exception and raise that
+                raise Exception(str(xrow['id']) + "\n" + "".join(traceback.format_exception(*sys.exc_info())))
+            if result is None:
+                print(xrow['id'])
+                continue
+            elif isinstance(result, dict):
+                bad.add_row(result)
+                continue
+            for new_row in result:
+                tbl.add_row(new_row)
+        return tbl, des, bad
 
     pool = mp.Pool(pool_size)
     pool_result = pool.map(run_single, np.array_split(data, pool_size))

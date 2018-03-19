@@ -370,7 +370,7 @@ class UniDAMTool(object):
             # Right-hand side of the histogram goes to zero in some cases,
             # because weights might be too small.
             # In such case we remove low-weight rows from the sample.
-            stage_data = stage_data[stage_data[:, mass_column] <
+            stage_data = stage_data[stage_data[:, mass_column] <=
                                     xbins[highest_positive_bin + 1]]
         for split in histogram_splitter(h[0], h[1]):
             yield stage_data[stage_data[:, mass_column] <= split]
@@ -455,8 +455,12 @@ class UniDAMTool(object):
             bin_centers = self.age_grid
         else:
             bin_centers = 0.5 * (bins[1:] + bins[:-1])
-        hist = np.histogram(mode_data[mode_data > bins[0]], bins,
-                            weights=weights[mode_data > bins[0]])[0]
+        # We need mode_data >= bins[0], otherwise numpy behaves
+        # strangely sometimes.
+        hist = np.histogram(mode_data[mode_data >= bins[0]]
+                            , bins,
+                            weights=weights[mode_data >= bins[0]]
+                            )[0]
         hist = hist / (hist.sum() * (bins[1:] - bins[:-1]))
         if smooth is not None:
             if name in ['distance_modulus', 'extinction']:
@@ -524,6 +528,9 @@ class UniDAMTool(object):
                 # This is done for the case of very low weights...
                 # I guess it should be done otherwise, but...
                 err = np.std(mode_data)
+            elif err > 0.5 * (m_max - m_min):
+                # This is for the case of very high smoothing values.
+                err = 0.5 * (m_max - m_min)
             # Get a first guess on the number of bins needed
             bins = self.get_bin_count(name, mode_data, weights)
             if len(bins) <= 4 and name != 'age':

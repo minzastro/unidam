@@ -474,6 +474,12 @@ class UniDAMTool(object):
 
     def _get_histogram_parts(self, name, mode_data, weights, bins,
                              extinction_data, smooth):
+        """
+        Get the smoothed histogram for the case when parallax is known.
+        In this case we need to distinguish between models with
+        extinctions below and above the input extinction --
+        these sets will need different smoothing.
+        """
         part1 = mode_data[extinction_data < mf.extinction]
         weight1 = weights[extinction_data < mf.extinction]
         bin_centers = from_bins(bins)
@@ -492,6 +498,7 @@ class UniDAMTool(object):
                                         weight1, xbins,
                                         smooth[0])
                 hist[bin_left:bin_right - 1] = hist1
+        # And now the second part with a different smoothing
         part2 = mode_data[extinction_data >= mf.extinction]
         weight2 = weights[extinction_data >= mf.extinction]
         if len(part2) > 0:
@@ -705,17 +712,22 @@ class UniDAMTool(object):
             smooth_distance = np.sqrt(1. / self.mag_err[0])
             smooth_extinction = np.sqrt(1. / self.mag_err[0]) / self.Rk[0]
         if mf.parallax_known:
+            # If the parallax is known, we have to modify the Hessian,
+            # because L_sed now includes new term for parallax prior
             hess_matrix = np.copy(self.mag_matrix)
             hess_matrix[0, 0] += 0.212 * mf.parallax**2 / mf.parallax_error**2
-            #hess_matrix[1, 1] += 1./mf.extinction_error ** 2
             # Magic constant 0.212 is (0.2 log(10))**2
             covariance = np.linalg.inv(hess_matrix)
+            # For models with extinction > A_0 we need also to modify
+            # H_1,1 to account for extinction term in L_sed
             hess_matrix[1, 1] += 1./mf.extinction_error ** 2
             covariance2 = np.linalg.inv(hess_matrix)
             smooth_distance = [np.sqrt(covariance[0, 0]),
                                np.sqrt(covariance2[0, 0])]
             smooth_extinction = [np.sqrt(covariance[1, 1]),
                                  np.sqrt(covariance2[1, 1])]
+            # ...and we have two more degrees of freedom
+            # (extinction and parallax)
             dof += 2
         smooth_distance = np.atleast_1d(smooth_distance)
         smooth_extinction = np.atleast_1d(smooth_extinction)

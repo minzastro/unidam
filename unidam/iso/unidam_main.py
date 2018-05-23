@@ -59,7 +59,8 @@ class UniDAMTool(object):
         'max_param_err': '4',
         'parallax_known': '0',
         'allow_negative_extinction': '0',
-        'dump_pdf': False
+        'dump_pdf': False,
+        'dump_prefix': 'dump'
         }
 
     MIN_USPDF_WEIGHT = 0.03
@@ -113,6 +114,7 @@ class UniDAMTool(object):
         # at the very end - weight column
         self.w_column = len(self.fitted_columns) + 2
         self.dump_pdf = config.getboolean('general', 'dump_pdf')
+        self.dump_prefix = config.get('general', 'dump_prefix')
         if self.dump_pdf:
             self.total_age_pdf = np.zeros(constants.AGE_RANGE.shape[0])
             self.total_2d_pdf = np.zeros((constants.DM_RANGE.shape[0],
@@ -829,11 +831,11 @@ class UniDAMTool(object):
         idstr = str(row[self.id_column]).strip()
         dump_array = range(self.w_column + 1)
         header = '%s L_iso L_sed p_w' % ' '.join(self.fitted_columns.keys())
-        np.savetxt('dump/dump_%s.dat' % idstr,
+        np.savetxt('%s/dump_%s.dat' % (self.dump_prefix, idstr),
                    model_params[:, dump_array],
                    header=header)
         json.dump(result,
-                  open('dump/dump_%s.json' % idstr, 'w'),
+                  open('%s/dump_%s.json' % (self.dump_prefix, idstr), 'w'),
                   indent=2, cls=NumpyAwareJSONEncoder)
 
     def get_table(self, data, idtype=str):

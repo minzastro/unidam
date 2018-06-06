@@ -112,7 +112,10 @@ def plot_pdf(xid, fits, name, data, column, ax, each=False,
             labels.append('Total')
     for axis in ['top', 'bottom', 'left', 'right']:
         ax.spines[axis].set_linewidth(1.5)
-    ax.set_xlabel(UNITS[name])
+    if name in UNITS:
+        ax.set_xlabel(UNITS[name])
+    else:
+        ax.set_xlabel(name)
     ax.set_ylabel('PDF')
     step = (binx[-1] - binx[0])/5
     min_x = binx[0]
@@ -148,7 +151,7 @@ def plot_pdf(xid, fits, name, data, column, ax, each=False,
             else:
                 plt.legend()
         plt.tight_layout()
-        plt.savefig('../iso/%s/dump_%s%s.png' % (dump, xid, name))
+        plt.savefig('../iso/%s/dump_%s%s.png' % (dump, xid, name.replace('/', '_')))
         plt.clf()
     return lines, labels
 
@@ -201,7 +204,16 @@ if __name__ == '__main__':
         data = np.loadtxt(data_name)
         fits = json.load(open('../iso/%s/dump_%s.json' % (args.dump, xid),
                               'r'))
-        for ii, item in enumerate([PLOTS[name] for name in args.what]):
+        plot_params = []
+        for name in args.what:
+            if name in PLOTS:
+                plot_params.append(PLOTS[name])
+            else:
+                for item in args.what.split(','):
+                    plot_params.append([item, 0])
+                break
+
+        for ii, item in enumerate(plot_params):
             if args.grid:
                 ax = plt.subplot(3, 1, ii + 1)
             else:

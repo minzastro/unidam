@@ -1,10 +1,11 @@
 # UniDAM
 A Unified tool to estimate Distances, Ages, and Masses (UniDAM) is
-described in https://arxiv.org/abs/1705.00963
+described in https://arxiv.org/abs/1705.00963 and https://arxiv.org/abs/1804.06578
 
 What you will need to run UniDAM (apart from UniDAM itself) is the following:
 
-1) Model file (can be downloaded from https://github.com/minzastro/unidam/releases/download/1.0/parsec_models.fits). Path to the model file should be indicated in the configuration file (see example in https://github.com/minzastro/unidam/blob/master/unidam/iso/unidam_pdf.conf)
+1) Model file (can be downloaded from https://github.com/minzastro/unidam/releases/download/2.0/PARSEC.fits for v2.0 or
+https://github.com/minzastro/unidam/releases/download/1.0/parsec_models.fits for v1.0). Path to the model file should be indicated in the configuration file (see example in https://github.com/minzastro/unidam/blob/master/unidam/iso/unidam_pdf.conf)
 
 2) Data file. Should be a fits or votable with the following columns:
 
@@ -14,7 +15,7 @@ What you will need to run UniDAM (apart from UniDAM itself) is the following:
 | logg    | log(cm*s-2) |
 | feh     | dex         |
 | dT      | K           |
-| dlogg   | log(cm*s-2) |
+| dlogg   | $log(cm*s^{-2})$ |
 | dfeh    | dex         |
 | Jmag    | mag         |
 | e_Jmag  | mag         |

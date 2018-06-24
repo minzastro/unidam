@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Thu Feb  4 10:07:35 2016
@@ -18,7 +19,7 @@ import pylab as plt
 import simplejson as json
 import argparse
 from unidam.utils.local import get_param
-
+from matplotlib.ticker import FormatStrFormatter
 
 def get_ydata(name, row, binx):
     """
@@ -45,7 +46,7 @@ UNITS = {'mass': 'Mass ($M_{sun}$)', 'age': 'log(age) (log years)',
 
 def plot_pdf(xid, fits, name, data, column, ax, each=False,
              total=False, correlations=False, legend=True,
-             plot_fits=True):
+             plot_fits=True, dump='dump'):
 
     lcolors = {0: 'c', 1: 'r', 2: 'b', 3: 'orange'}
     label = {0: '0', 1: 'I', 2: 'II', 3: 'III'}
@@ -119,7 +120,10 @@ def plot_pdf(xid, fits, name, data, column, ax, each=False,
             labels.append('Total')
     for axis in ['top', 'bottom', 'left', 'right']:
         ax.spines[axis].set_linewidth(1.5)
-    ax.set_xlabel(UNITS[name])
+    if name in UNITS:
+        ax.set_xlabel(UNITS[name])
+    else:
+        ax.set_xlabel(name)
     ax.set_ylabel('PDF')
     step = (binx[-1] - binx[0])/5
     min_x = binx[0]
@@ -140,11 +144,13 @@ def plot_pdf(xid, fits, name, data, column, ax, each=False,
         min_x = int(2. * min_x) * 0.5
         max_x = int(2. * max_x) * 0.5
     else:
-        step = 0.25
+        step = 0.25 * (binx[-1] - binx[0])
+    print(name, min_x, max_x, step)
     ax.xaxis.set_ticks(np.arange(min_x, max_x+step, step))
     ax.set_ylim(0., np.max(ns[0])*1.1)
     ax.yaxis.set_ticks(np.linspace(0., np.max(ns[0])*1.1, 6))
     ax.yaxis.set_ticklabels(np.linspace(0., 1., 6))
+    ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
     plt.tight_layout()
     if each:
         if legend:
@@ -153,7 +159,7 @@ def plot_pdf(xid, fits, name, data, column, ax, each=False,
             else:
                 plt.legend()
         plt.tight_layout()
-        plt.savefig('../iso/dump/dump_%s%s.png' % (xid, name))
+        plt.savefig('../iso/%s/dump_%s%s.png' % (dump, xid, name.replace('/', '_')))
         plt.clf()
     return lines, labels
 
@@ -168,6 +174,8 @@ if __name__ == '__main__':
                         help='Title to add at the top')
     parser.add_argument('-w', '--what', type=str, default='AMD',
                         help='What to plot')
+    parser.add_argument('-d', '--dump', type=str, default='dump',
+                        help='Dump folder name')
     parser.add_argument('-g', '--grid', action="store_true",
                         default=False,
                         help='Place all plots into one file')
@@ -199,24 +207,41 @@ if __name__ == '__main__':
         plt.title(args.title)
 
     for xid in args.input.split(','):
-        data = np.loadtxt('../iso/dump/dump_%s.dat' % xid)
-        fits = json.load(open('../iso/dump/dump_%s.json' % xid, 'r'))
-        for ii, item in enumerate([PLOTS[name] for name in args.what]):
+        data_name = '../iso/%s/dump_%s.dat' % (args.dump, xid)
+        columns = open(data_name, 'r').readline()[2:].split()
+        data = np.loadtxt(data_name)
+        fits = json.load(open('../iso/%s/dump_%s.json' % (args.dump, xid),
+                              'r'))
+        plot_params = []
+        for name in args.what:
+            if name in PLOTS:
+                plot_params.append(PLOTS[name])
+            else:
+                for item in args.what.split(','):
+                    plot_params.append([item, 0])
+                break
+
+        for ii, item in enumerate(plot_params):
             if args.grid:
                 ax = plt.subplot(3, 1, ii + 1)
             else:
                 ax = plt.subplot(111)
-            lines, labels = plot_pdf(xid, fits, item[0], data, item[1], ax,
+            if item[0] not in columns:
+                raise ValueError('%s not in data columns: %s', item[0], columns)
+            col_index = columns.index(item[0])
+            lines, labels = plot_pdf(xid, fits, item[0], data, col_index, ax,
                                      not args.grid, args.total,
                                      args.correlations,
-                                     args.legend, not args.nofit)
+                                     args.legend, not args.nofit,
+                                     dump=args.dump)
         if args.grid:
             if args.legend:
                 leg = plt.figlegend(lines, labels, loc=(0.05, 0.01),
                                     ncol=4, frameon=False)
                 fig.subplots_adjust(bottom=0.15)
-                fig.savefig('../iso/dump/dump_%s.png' % xid,
+                fig.savefig('../iso/%s/dump_%s.png' % (args.dump, xid),
                             bbox_extra_artists=(leg,), bbox_inches='tight')
             else:
-                fig.savefig('../iso/dump/dump_%s.png' % xid, bbox_inches='tight')
+                fig.savefig('../iso/%s/dump_%s.png' % (args.dump, xid),
+                            bbox_inches='tight')
             plt.clf()

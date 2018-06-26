@@ -4,6 +4,30 @@
 Created on Wed Feb 21 10:43:39 2018
 
 @author: mints
+Tool to prepare files for UniDAM. 
+UniDAM takes as an input a FITS file of a pre-defined structure.
+This tool helps to prepare such files from user data.
+Photometry is created automatically by cross-matching
+with 2MASS and AllWISE. Gaia DR2 cross-match is also done 
+(this should be optional...).
+If provided in config, galactic coordinates are taken from 
+input file, otherwise they are calculated.
+
+An example of config file:
+# List of column names to be kept in the output file
+keep='GES', 'RAJ2000', 'DEJ2000', 'Teff', 'logg', '__Fe_H_'
+[mapping]
+# output column = input column or "!constant"
+id=GES
+T=Teff
+logg=logg
+feh=__Fe_H_
+dT=!100
+dlogg=!0.1
+dfeh=!0.1
+[galactic]
+longitude=l
+lattitude=b
 """
 import os
 import argparse
@@ -21,7 +45,7 @@ warnings.filterwarnings('ignore', category=AstropyWarning)
 warnings.filterwarnings('ignore', category=UserWarning)
 
 parser = argparse.ArgumentParser(description="""
-Tool prepare files for UniDAM.
+Tool to prepare files for UniDAM.
 """, formatter_class=argparse.RawDescriptionHelpFormatter)
 parser.add_argument('-i', '--input', type=str, required=True,
                     help='Input filename')
@@ -35,7 +59,7 @@ parser.add_argument('--dec', type=str, default='DEJ2000',
                     help='DEC column name')
 parser.add_argument('-f', '--force', action="store_true",
                     default=False,
-                    help='Overwrite file if exists')
+                    help='Overwrite output file if exists')
 args = parser.parse_args()
 
 extinction.init()
@@ -97,6 +121,7 @@ data.remove_columns(['angDist',
                      'e_W3mag', 'e_W4mag',
                      'pmRA', 'e_pmRA', 'pmDE', 'e_pmDE', 'ID', 'd2M'] +
                     bad_col)
+# TODO: make this an option.
 print('XMatching with Gaia')
 data = XMatch.query(cat1=data,
                     cat2='vizier:I/337/gaia',
@@ -110,7 +135,7 @@ data.remove_columns(['ra_ep2000', 'dec_ep2000',
                      'ra_error', 'dec_error',
                      'pmra', 'pmra_error', 'pmdec', 'pmdec_error',
                      'ra_dec_corr', 'duplicated_source',
-                     'phot_g_mean_mag', 'phot_variable_flag'])
+                     'phot_variable_flag'])
 clean(data)
 data['parallax'] *= 1e-3
 data['parallax_error'] *= 1e-3

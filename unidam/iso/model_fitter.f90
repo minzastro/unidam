@@ -50,7 +50,7 @@ logical, save :: special_columns(4)
 !> Flag indicating if the parallax is known
 logical, save :: parallax_known = .false.
 real, save :: parallax, parallax_error, extinction, extinction_error
-
+real, save :: parallax_L_correction
 !> Distance prior:
 !> 0 = none
 !> 1 = d^2
@@ -230,7 +230,7 @@ subroutine find_best(m_count)
         if ((size(mag_err).ge.2).or.(parallax_known)) then
           if (parallax_known) then
               bic1 = 1e10
-              mu_d(1) = -5. * (log10(parallax) + 1.)
+              mu_d(1) = -5. * (log10(abs(parallax)) + 1.)
               mu_d(2) = extinction
               call solve_for_distance_with_parallax(vector, mu_d)
               L_sed = 0.5*sum((mag - mu_d(1) - models(i, abs_mag) - Ck * mu_d(2))**2 * mag_err)
@@ -284,6 +284,7 @@ subroutine find_best(m_count)
             if (mu_d(2) .ge. extinction) then
                 L_sed = L_sed + 0.5 * (mu_d(2) - extinction)**2 / (extinction_error**2)
             endif
+            L_sed = L_sed + parallax_L_correction
         endif
         model_params(m_count, prob) = L_model
         ! SED likelihood

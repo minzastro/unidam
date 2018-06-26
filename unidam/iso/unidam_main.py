@@ -17,7 +17,7 @@ import numpy as np
 import simplejson as json
 from astropy.table import Table, Column
 from astropy.io import fits
-from scipy.stats import chi2
+from scipy.stats import chi2, norm, truncnorm
 from scipy.ndimage.filters import gaussian_filter1d
 from unidam.iso.model_fitter import model_fitter as mf  # pylint: disable=no-member
 from unidam.iso.histogram_splitter import histogram_splitter
@@ -56,6 +56,14 @@ def get_splitted(config, name):
     else:
         return config.get('general', name).split(',')
 
+
+def get_modified_chi2(offset, dof, sum_of_squares):
+    r = [truncnorm.rvs(a=offset, b=np.inf, size=10000)]
+    for _ in range(dof - 1):
+        r.append(norm.rvs(size=10000))
+    rr = np.sum(np.array(r)**2, axis=0)
+    return (np.sum(rr < sum_of_squares) * 1e-4)
+    
 
 class UniDAMTool(object):
     """
@@ -113,22 +121,23 @@ class UniDAMTool(object):
                 config.set('general', key, str(value))
         self.keep_columns = get_splitted(config, 'keep_columns')
         self.fitted_columns = get_splitted(config, 'fitted_columns')
-        for item in self.SPECIAL:
-            move_to_end(self.fitted_columns, item)
         # This array contains indices in the model table for input data
         self.model_columns = get_splitted(config, 'model_columns')
         self.default_bands = get_splitted(config, 'band_columns')
+        mf.parallax_known = config.getboolean('general', 'parallax_known')
+        if mf.parallax_known:
+            self._update_config('parallax', config)
+            self._update_config('extinction', config)
+            self.MINIMUM_STEP['distance_modulus'] = 1e-5
+        for item in self.SPECIAL:
+            # Special columns should appear at the end
+            # of fitted_columns list, and in the prescribed order.
+            move_to_end(self.fitted_columns, item)
         # This is the index of column with output model weights.
         # In the output table (mf.model_data) there are columns for
         # fitted columns + columns for L_iso, L_sed and
         # at the very end - weight column
         self.w_column = len(self.fitted_columns) + 2
-        self.dump_pdf = config.getboolean('general', 'dump_pdf')
-        self.dump_prefix = config.get('general', 'dump_prefix')
-        if self.dump_pdf:
-            self.total_age_pdf = np.zeros(constants.AGE_RANGE.shape[0])
-            self.total_2d_pdf = np.zeros((constants.DM_RANGE.shape[0],
-                                          constants.AGE_RANGE.shape[0]))
         mf.max_param_err = config.getint('general', 'max_param_err')
         mf.use_model_weight = True
         mf.use_magnitude_probability = \
@@ -138,11 +147,13 @@ class UniDAMTool(object):
             'general', 'allow_negative_extinction')
         for icolumn, column in enumerate(self.SPECIAL):
             mf.special_columns[icolumn] = column in self.fitted_columns
-        mf.parallax_known = config.getboolean('general', 'parallax_known')
-        if mf.parallax_known:
-            self._update_config('parallax', config)
-            self._update_config('extinction', config)
-            self.MINIMUM_STEP['distance_modulus'] = 1e-5
+        self.dump_pdf = config.getboolean('general', 'dump_pdf')
+        self.dump_prefix = config.get('general', 'dump_prefix')
+        if self.dump_pdf:
+            self.total_age_pdf = np.zeros(constants.AGE_RANGE.shape[0])
+            self.total_2d_pdf = np.zeros((constants.DM_RANGE.shape[0],
+                                          constants.AGE_RANGE.shape[0]))
+                
         self.RK = {band: constants.R_FACTORS[band] / constants.R_FACTORS['K']
                    for band in constants.R_FACTORS}
         self.RV = {band: constants.R_FACTORS[band] / constants.R_FACTORS['V']
@@ -247,6 +258,7 @@ class UniDAMTool(object):
         if mf.parallax_known:
             mf.parallax = row[self.config['parallax']]
             mf.parallax_error = row[self.config['parallax_err']]
+            mf.parallax_L_correction = np.log(norm.cdf(mf.parallax / mf.parallax_error))
             mf.extinction = row[self.config['extinction']]
             mf.extinction_error = row[self.config['extinction_err']]
 
@@ -707,6 +719,38 @@ class UniDAMTool(object):
             sed_dict['ObsErr'][band] = 1./np.sqrt(self.mag_err[iband])
         return sed_dict
 
+    def get_psed_pbest(self, xdata, dof):
+        best_model = np.argmin(xdata[:, self.w_column - 1] +
+                               xdata[:, self.w_column - 2])
+        l_sed = xdata[best_model, self.w_column - 1]
+        l_best = l_sed + xdata[best_model, self.w_column - 2]
+        if mf.parallax_known:
+            #best_parallax = xdata[best_model, -3]
+            fracpar = -mf.parallax / mf.parallax_error
+            #chi2_correction = 1. - norm.cdf(mf.parallax / mf.parallax_error)
+            if fracpar > -10:
+                return {'p_sed': get_modified_chi2(fracpar, dof, 2. * (l_sed - mf.parallax_L_correction)),
+                        'p_best': get_modified_chi2(fracpar, dof + 3, 2. * (l_best - mf.parallax_L_correction)),
+                        }
+            else:
+                return {'p_sed': 1. - chi2.cdf(2. * l_sed, dof),
+                        'p_best': 1. - chi2.cdf(2. * l_best, dof + 3)}
+            if mf.parallax < 0:
+                return {'p_sed': 1. - chi2.cdf(2. * l_sed, dof) / chi2_correction,
+                        'p_best': 1. - chi2.cdf(2. * l_best, dof + 3) / chi2_correction}
+            else:
+                f = 1-truncnorm.cdf(fracpar, a=-fracpar, b=np.inf)
+                psed = 1. - (chi2.cdf(2. * l_sed, df=dof) -
+                             f * chi2.cdf(2. * l_sed - fracpar, df=dof)) / (1-f)
+                pbest = 1. - (chi2.cdf(2. * l_best, df=dof + 3) -
+                              f * chi2.cdf(2. * l_best - fracpar, df=dof + 3)) / (1-f)
+                print(fracpar, f)
+                return {'p_sed': psed,
+                        'p_best': pbest}
+        else:
+            return {'p_sed': 1. - chi2.cdf(2. * l_sed, dof),
+                    'p_best': 1. - chi2.cdf(2. * l_best, dof + 3)}
+
     def get_row(self, xdata, wtotal):
         """
         Prepare output row for the selection of models.
@@ -750,9 +794,10 @@ class UniDAMTool(object):
         new_result = {'stage': xdata[0, 0],
                       'uspdf_points': xdata.shape[0],
                       'uspdf_weight': np.sum(xdata[:, self.w_column]) / wtotal,
-                      'p_best': 1. - chi2.cdf(2. * l_best, dof + 3),
-                      'p_sed': 1. - chi2.cdf(2. * l_sed, dof)
+                     # 'p_sed': 1. - chi2.cdf(2. * l_sed, dof),
+                     # 'p_best': 1. - chi2.cdf(2. * l_best, dof + 3),
                      }
+        new_result.update(self.get_psed_pbest(xdata, dof))
         if self.dump:
             new_result['sed_debug'] = self.dump_sed(xdata)
         for ikey, key in enumerate(self.fitted_columns.keys()):
@@ -763,7 +808,7 @@ class UniDAMTool(object):
                 new_result['distance_modulus_smooth'] = smooth_distance[0]
                 smooth = smooth_distance
                 if len(smooth) == 2:
-                    extinction_if_needed = xdata[:, self.fitted_columns.keys().index('extinction')]
+                    extinction_if_needed = xdata[:, list(self.fitted_columns.keys()).index('extinction')]
             elif key == 'extinction':
                 new_result['extinction_smooth'] = smooth_extinction[0]
                 smooth = smooth_extinction

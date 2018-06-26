@@ -725,9 +725,7 @@ class UniDAMTool(object):
         l_sed = xdata[best_model, self.w_column - 1]
         l_best = l_sed + xdata[best_model, self.w_column - 2]
         if mf.parallax_known:
-            #best_parallax = xdata[best_model, -3]
             fracpar = -mf.parallax / mf.parallax_error
-            #chi2_correction = 1. - norm.cdf(mf.parallax / mf.parallax_error)
             if fracpar > -10:
                 return {'p_sed': get_modified_chi2(fracpar, dof, 2. * (l_sed - mf.parallax_L_correction)),
                         'p_best': get_modified_chi2(fracpar, dof + 3, 2. * (l_best - mf.parallax_L_correction)),

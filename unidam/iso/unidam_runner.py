@@ -66,7 +66,7 @@ if args.id is not None:
     ids = (args.id).split(',')
     if idtype.kind == 'S':
         len_id = idtype.itemsize
-        mask = [j.strip() in np.asarray(ids, dtype=idtype) for j in data[de.id_column]]
+        mask = [j.strip() in np.asarray(ids, dtype=str) for j in data[de.id_column]]
     else:
         mask = [j in np.asarray(ids, dtype=idtype) for j in data[de.id_column]]
     data = data[np.where(mask)]

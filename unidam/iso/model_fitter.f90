@@ -285,6 +285,7 @@ subroutine find_best(m_count)
                 L_sed = L_sed + 0.5 * (mu_d(2) - extinction)**2 / (extinction_error**2)
             endif
             L_sed = L_sed + parallax_L_correction
+            !write(45, *) L_sed, parallax_L_correction, parallax, parallax_error
         endif
         model_params(m_count, prob) = L_model
         ! SED likelihood

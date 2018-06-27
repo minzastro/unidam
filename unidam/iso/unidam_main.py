@@ -258,7 +258,8 @@ class UniDAMTool(object):
         if mf.parallax_known:
             mf.parallax = row[self.config['parallax']]
             mf.parallax_error = row[self.config['parallax_err']]
-            mf.parallax_L_correction = np.log(norm.cdf(mf.parallax / mf.parallax_error))
+            mf.parallax_l_correction = np.log(norm.cdf(mf.parallax / mf.parallax_error))
+            print(mf.parallax_l_correction)
             mf.extinction = row[self.config['extinction']]
             mf.extinction_error = row[self.config['extinction_err']]
 
@@ -727,24 +728,14 @@ class UniDAMTool(object):
         if mf.parallax_known:
             fracpar = -mf.parallax / mf.parallax_error
             if fracpar > -10:
-                return {'p_sed': get_modified_chi2(fracpar, dof, 2. * (l_sed - mf.parallax_L_correction)),
-                        'p_best': get_modified_chi2(fracpar, dof + 3, 2. * (l_best - mf.parallax_L_correction)),
+                return {'p_sed': 1. - get_modified_chi2(fracpar, dof,
+                                                        2. * (l_sed - mf.parallax_l_correction)),
+                        'p_best': 1. - get_modified_chi2(fracpar, dof + 3,
+                                                         2. * (l_best - mf.parallax_l_correction)),
                         }
             else:
                 return {'p_sed': 1. - chi2.cdf(2. * l_sed, dof),
                         'p_best': 1. - chi2.cdf(2. * l_best, dof + 3)}
-            if mf.parallax < 0:
-                return {'p_sed': 1. - chi2.cdf(2. * l_sed, dof) / chi2_correction,
-                        'p_best': 1. - chi2.cdf(2. * l_best, dof + 3) / chi2_correction}
-            else:
-                f = 1-truncnorm.cdf(fracpar, a=-fracpar, b=np.inf)
-                psed = 1. - (chi2.cdf(2. * l_sed, df=dof) -
-                             f * chi2.cdf(2. * l_sed - fracpar, df=dof)) / (1-f)
-                pbest = 1. - (chi2.cdf(2. * l_best, df=dof + 3) -
-                              f * chi2.cdf(2. * l_best - fracpar, df=dof + 3)) / (1-f)
-                print(fracpar, f)
-                return {'p_sed': psed,
-                        'p_best': pbest}
         else:
             return {'p_sed': 1. - chi2.cdf(2. * l_sed, dof),
                     'p_best': 1. - chi2.cdf(2. * l_best, dof + 3)}

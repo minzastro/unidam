@@ -259,7 +259,6 @@ class UniDAMTool(object):
             mf.parallax = row[self.config['parallax']]
             mf.parallax_error = row[self.config['parallax_err']]
             mf.parallax_l_correction = np.log(norm.cdf(mf.parallax / mf.parallax_error))
-            print(mf.parallax_l_correction)
             mf.extinction = row[self.config['extinction']]
             mf.extinction_error = row[self.config['extinction_err']]
 

@@ -759,9 +759,14 @@ class UniDAMTool(object):
             # If the parallax is known, we have to modify the Hessian,
             # because L_sed now includes new term for parallax prior
             hess_matrix = np.copy(self.mag_matrix)
-            hess_matrix[0, 0] += 0.212 * mf.parallax**2 / mf.parallax_error**2
-            # Magic constant 0.212 is (0.2 log(10))**2
-            covariance = np.linalg.inv(hess_matrix)
+            if self.mag_err.size > 1 or abs(mf.parallax) > 0:
+                hess_matrix[0, 0] += 0.212 * mf.parallax**2 / mf.parallax_error**2
+                # Magic constant 0.212 is (0.2 log(10))**2
+                covariance = np.linalg.inv(hess_matrix)
+            else:
+                covariance = np.zeros((2, 2))
+                covariance[0][0] = np.sqrt(1. / self.mag_err[0])
+                covariance[1][1] = np.sqrt(1. / self.mag_err[0]) / self.Rk[0]
             # For models with extinction > A_0 we need also to modify
             # H_1,1 to account for extinction term in L_sed
             hess_matrix[1, 1] += 1./mf.extinction_error ** 2

@@ -63,7 +63,7 @@ def get_modified_chi2(offset, dof, sum_of_squares):
         r.append(norm.rvs(size=10000))
     rr = np.sum(np.array(r)**2, axis=0)
     return (np.sum(rr < sum_of_squares) * 1e-4)
-    
+
 
 class UniDAMTool(object):
     """
@@ -153,7 +153,7 @@ class UniDAMTool(object):
             self.total_age_pdf = np.zeros(constants.AGE_RANGE.shape[0])
             self.total_2d_pdf = np.zeros((constants.DM_RANGE.shape[0],
                                           constants.AGE_RANGE.shape[0]))
-                
+
         self.RK = {band: constants.R_FACTORS[band] / constants.R_FACTORS['K']
                    for band in constants.R_FACTORS}
         self.RV = {band: constants.R_FACTORS[band] / constants.R_FACTORS['V']

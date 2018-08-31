@@ -57,6 +57,7 @@ real, save :: parallax_L_correction
 !> 2 = RAVE Galaxy model (unimplemented)
 !> 3 = RAVE Galaxy model + d^2 (unimplemented)
 integer, save :: distance_prior = 1
+real, save :: prior_parameter = 2e3
 
 contains
 
@@ -152,10 +153,9 @@ subroutine solve_for_distance_with_parallax(vector, solution)
   !! is needed here.
   real, intent(in) :: vector(2)
   real, intent(inout) :: solution(2)
-  integer iterations
-  integer :: info, i
+  integer :: info
   real :: tol=1e-8
-  real, dimension(2) :: x,fvec,diag
+  real, dimension(2) :: fvec, diag
     call hbrd(fcnx, 2, solution, fvec, epsilon(tol), tol, info, diag)
     return
     contains
@@ -174,7 +174,12 @@ subroutine solve_for_distance_with_parallax(vector, solution)
           endif
           FVEC(1) = -vector(1) + sum(Ck * X(2) * mag_err) + &
             sum(X(1) * mag_err) - &
-            0.2 * log(10.) * (2. + pi * (pi - parallax)/ parallax_error**2)
+            0.2 * log(10.) * pi * (pi - parallax)/ parallax_error**2
+          if (distance_prior.eq.1) then
+            FVEC(1) = FVEC(1) + 0.4 * log(10.)
+          else if (distance_prior.eq.2) then
+            FVEC(1) = FVEC(1) + 0.2 * log(10.) * (2. - 1./(pi * prior_parameter)) 
+          endif
           FVEC(2) = -vector(2) + sum(Ck * Ck * X(2) * mag_err) + &
             sum(Ck * X(1) * mag_err) + extra
     END SUBROUTINE FCNX
@@ -309,16 +314,18 @@ subroutine find_best(m_count)
            ! Multiply by model weight (combined of age and mass weighting)
            p = p * models(i, model_column_count)
         endif
-        if ((distance_prior.eq.1).or.(parallax_known)) then
+        if (distance_prior.eq.1) then
            ! Multiply by d^2 - volume factor correction
            p = p * distance * distance
+        else if (distance_prior.eq.2) then
+           p = p * (distance * distance * exp(-distance / prior_parameter))
         endif
         model_params(m_count, prob+2) = p
         model_params(m_count, prob+3) = i
         if (debug) then
           write(66, *) models(i, model_column_count), models(i, abs_mag), &
                        models(i, model_columns), models(i, model_column_count-1), -99, &
-                       model_params(m_count, 1:prob+2), mag - models(i, abs_mag), L_model, L_sed, p, i
+                       model_params(m_count, 1:prob+2), mag - models(i, abs_mag), L_model, L_sed, p, i, distance_prior
         endif
         m_count = m_count + 1
       endif

@@ -14,6 +14,7 @@ real, allocatable :: model_params(:, :)
 real, allocatable :: param(:)
 !> Uncertainties of parameters for a current star (T, logg, feh)
 real, allocatable :: param_err(:)
+logical, save :: use_photometry = .true.
 !> Visible magnitudes for a current star
 real, allocatable :: mag(:)
 !> Uncertainties of visible magnitudes for a current star
@@ -218,79 +219,83 @@ subroutine find_best(m_count)
           cycle
         endif
         mu_d(:) = -1.
-        if (parallax_known) then
-          vector(1) = sum((mag - models(i, abs_mag))*mag_err)
-          vector(2) = sum((mag - models(i, abs_mag))*mag_err*Ck)
-          mu_d_noext = vector(1) / matrix0(1, 1)
-          L_sednoext = 0.5*sum((mag - mu_d_noext - models(i, abs_mag))**2 * mag_err)
-        else ! No distance or parallax known
-          vector(1) = sum((mag - models(i, abs_mag))*mag_err)
-          if (distance_prior.eq.1) then
-            vector(1) = vector(1) + log(10.)*0.4
-          endif
-          vector(2) = sum((mag - models(i, abs_mag))*mag_err*Ck)
-          mu_d_noext = vector(1) / matrix0(1, 1)
-          L_sednoext = 0.5*sum((mag - mu_d_noext - models(i, abs_mag))**2 * mag_err)
-        endif
-        if ((size(mag_err).ge.2).or.(parallax_known)) then
-          if (parallax_known) then
-              bic1 = 1e10
-              mu_d(1) = -5. * (log10(abs(parallax)) + 1.)
-              mu_d(2) = extinction
-              call solve_for_distance_with_parallax(vector, mu_d)
-              L_sed = 0.5*sum((mag - mu_d(1) - models(i, abs_mag) - Ck * mu_d(2))**2 * mag_err)
-          else
-              ! If there are 2 or more bands observed
-              ! then we can solve eq. 15
-              bic1 = 2.*L_sednoext + log(float(size(mag_err)))
-              call solve_for_distance(vector, mu_d)
-              L_sed = 0.5*sum((mag - mu_d(1) - models(i, abs_mag) - Ck * mu_d(2))**2 * mag_err)
-          endif
-          bic2 = 2.*L_sed + 2.*log(float(size(mag_err)))
-          if (((mu_d(2).lt.0.0).and.(.not.allow_negative_extinction)) .or. &
-              (bic1.le.bic2)) then
-            ! Negative extinction. This is not physical - replace it by 0 and recalculate dm
-            ! OR we get a better fit with no assumption on extinction at all.
-            L_sed = L_sednoext
-            mu_d(1) = mu_d_noext
-            mu_d(2) = 0d0
-          endif
-        else
-          L_sed = L_sednoext
-          mu_d(1) = mu_d_noext
-          mu_d(2) = 0d0
-        endif
         off = size(fitted_columns)
         model_params(m_count, :off) = models(i, fitted_columns)
-        ! Distance modulus
-        if (special_columns(1)) then
-            off = off + 1
-            model_params(m_count, off) = mu_d(1)
-        endif
-        ! Extinction
-        if (special_columns(2)) then
-            off = off + 1
-            model_params(m_count, off) = mu_d(2)
-        endif
-        ! Distance
-        distance = 10**(mu_d(1)*0.2 + 1)
-        if (special_columns(3)) then
-            off = off + 1
-            model_params(m_count, off) = distance
-        endif
-        ! Parallax
-        if (special_columns(4)) then
-            off = off + 1
-            model_params(m_count, off) = 1. / distance
-        endif
-        ! Unweighted isochrone likelihood
-        if (parallax_known) then
-            L_sed = L_sed + 0.5 * (1. / distance - parallax)**2 / (parallax_error**2)
-            if (mu_d(2) .ge. extinction) then
-                L_sed = L_sed + 0.5 * (mu_d(2) - extinction)**2 / (extinction_error**2)
+        if (use_photometry) then
+            if (parallax_known) then
+              vector(1) = sum((mag - models(i, abs_mag))*mag_err)
+              vector(2) = sum((mag - models(i, abs_mag))*mag_err*Ck)
+              mu_d_noext = vector(1) / matrix0(1, 1)
+              L_sednoext = 0.5*sum((mag - mu_d_noext - models(i, abs_mag))**2 * mag_err)
+            else ! No distance or parallax known
+              vector(1) = sum((mag - models(i, abs_mag))*mag_err)
+              if (distance_prior.eq.1) then
+                vector(1) = vector(1) + log(10.)*0.4
+              endif
+              vector(2) = sum((mag - models(i, abs_mag))*mag_err*Ck)
+              mu_d_noext = vector(1) / matrix0(1, 1)
+              L_sednoext = 0.5*sum((mag - mu_d_noext - models(i, abs_mag))**2 * mag_err)
             endif
-            L_sed = L_sed + parallax_L_correction
-            !write(45, *) L_sed, parallax_L_correction, parallax, parallax_error
+            if ((size(mag_err).ge.2).or.(parallax_known)) then
+              if (parallax_known) then
+                  bic1 = 1e10
+                  mu_d(1) = -5. * (log10(abs(parallax)) + 1.)
+                  mu_d(2) = extinction
+                  call solve_for_distance_with_parallax(vector, mu_d)
+                  L_sed = 0.5*sum((mag - mu_d(1) - models(i, abs_mag) - Ck * mu_d(2))**2 * mag_err)
+              else
+                  ! If there are 2 or more bands observed
+                  ! then we can solve eq. 15
+                  bic1 = 2.*L_sednoext + log(float(size(mag_err)))
+                  call solve_for_distance(vector, mu_d)
+                  L_sed = 0.5*sum((mag - mu_d(1) - models(i, abs_mag) - Ck * mu_d(2))**2 * mag_err)
+              endif
+              bic2 = 2.*L_sed + 2.*log(float(size(mag_err)))
+              if (((mu_d(2).lt.0.0).and.(.not.allow_negative_extinction)) .or. &
+                  (bic1.le.bic2)) then
+                ! Negative extinction. This is not physical - replace it by 0 and recalculate dm
+                ! OR we get a better fit with no assumption on extinction at all.
+                L_sed = L_sednoext
+                mu_d(1) = mu_d_noext
+                mu_d(2) = 0d0
+              endif
+            else
+              L_sed = L_sednoext
+              mu_d(1) = mu_d_noext
+              mu_d(2) = 0d0
+            endif
+            ! Distance modulus
+            if (special_columns(1)) then
+                off = off + 1
+                model_params(m_count, off) = mu_d(1)
+            endif
+            ! Extinction
+            if (special_columns(2)) then
+                off = off + 1
+                model_params(m_count, off) = mu_d(2)
+            endif
+            ! Distance
+            distance = 10**(mu_d(1)*0.2 + 1)
+            if (special_columns(3)) then
+                off = off + 1
+                model_params(m_count, off) = distance
+            endif
+            ! Parallax
+            if (special_columns(4)) then
+                off = off + 1
+                model_params(m_count, off) = 1. / distance
+            endif
+            ! Unweighted isochrone likelihood
+            if (parallax_known) then
+                L_sed = L_sed + 0.5 * (1. / distance - parallax)**2 / (parallax_error**2)
+                if (mu_d(2) .ge. extinction) then
+                    L_sed = L_sed + 0.5 * (mu_d(2) - extinction)**2 / (extinction_error**2)
+                endif
+                L_sed = L_sed + parallax_L_correction
+                !write(45, *) L_sed, parallax_L_correction, parallax, parallax_error
+            endif
+        else
+            L_sed = 0
         endif
         model_params(m_count, prob) = L_model
         ! SED likelihood

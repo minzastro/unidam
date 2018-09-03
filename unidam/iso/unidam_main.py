@@ -124,8 +124,14 @@ class UniDAMTool(object):
         # This array contains indices in the model table for input data
         self.model_columns = get_splitted(config, 'model_columns')
         self.default_bands = get_splitted(config, 'band_columns')
+        if len(self.default_bands) == 0:
+            mf.use_photometry = False
         mf.parallax_known = config.getboolean('general', 'parallax_known')
         if mf.parallax_known:
+            if not mf.use_photometry:
+                raise ValueError('Cannot use parallaxes without'
+                                 'photometry. Please set band_columns'
+                                 'parameter in config')
             self._update_config('parallax', config)
             self._update_config('extinction', config)
             self.MINIMUM_STEP['distance_modulus'] = 1e-5
@@ -133,6 +139,9 @@ class UniDAMTool(object):
             # Special columns should appear at the end
             # of fitted_columns list, and in the prescribed order.
             move_to_end(self.fitted_columns, item)
+            if item in self.fitted_columns and mf.use_photometry:
+                raise ValueError('Distance-related output is requested, but'
+                                 ' no photometry provided.')
         # This is the index of column with output model weights.
         # In the output table (mf.model_data) there are columns for
         # fitted columns + columns for L_iso, L_sed and
@@ -226,8 +235,8 @@ class UniDAMTool(object):
             print(('No spectral params or invalid params for %s' % row_id))
             return {'id': row_id,
                     'error': 'No spectral params or invalid params'}
-        if self.mag.size == 0:
-            print(('No photometry for %s' % row_id))
+        if self.mag.size == 0 and mf.use_photometry:
+            print(('No photometry for a %s' % row_id))
             return {'id': row_id,
                     'error': 'No photometry'}
         return None
@@ -249,7 +258,9 @@ class UniDAMTool(object):
             mf.matrix_det = 1. / np.linalg.det(self.mag_matrix)
         else:
             mf.matrix_det = 0.  # Will be unsused anyway
-        mf.alloc_mag(self.mag, self.mag_err, self.Rk)
+        print(self.mag, self.mag_err, self.Rk)
+        if self.mag.size > 0:
+            mf.alloc_mag(self.mag, self.mag_err, self.Rk)
         mf.alloc_param(self.param, self.param_err)
         # Collect model-file column indices of fitted columns
         fitted = [item for item in list(self.fitted_columns.values()) if item >= 0]
@@ -309,6 +320,7 @@ class UniDAMTool(object):
             stage_data = model_params[stages == stage]
             stage_data = stage_data[stage_data[:, self.w_column] > 0]
             # Split stage data into USPDFs
+            import ipdb; ipdb.set_trace()
             for part_data in self.split_multimodal(stage_data):
                 if np.sum(part_data[:, self.w_column]) / \
                    total_mode_weight < self.MIN_USPDF_WEIGHT:
@@ -744,7 +756,11 @@ class UniDAMTool(object):
         Prepare output row for the selection of models.
         """
         dof = len(self.mag)
-        if self.mag_err.size > 1:
+        if self.mag_err.size == 0:
+            covariance = None
+            smooth_distance = 0
+            smooth_extinction = 0
+        elif self.mag_err.size > 1:
             # Calculating smoothing parameters from the inverse
             # Hessian matrix
             covariance = np.linalg.inv(self.mag_matrix)
@@ -755,7 +771,7 @@ class UniDAMTool(object):
             # from magnitude uncertainties directly
             smooth_distance = np.sqrt(1. / self.mag_err[0])
             smooth_extinction = np.sqrt(1. / self.mag_err[0]) / self.Rk[0]
-        if mf.parallax_known:
+        if mf.parallax_known and self.mag.size > 0:
             # If the parallax is known, we have to modify the Hessian,
             # because L_sed now includes new term for parallax prior
             hess_matrix = np.copy(self.mag_matrix)
@@ -791,7 +807,7 @@ class UniDAMTool(object):
                      # 'p_best': 1. - chi2.cdf(2. * l_best, dof + 3),
                      }
         new_result.update(self.get_psed_pbest(xdata, dof))
-        if self.dump:
+        if self.dump and self.mag.size > 0:
             new_result['sed_debug'] = self.dump_sed(xdata)
         for ikey, key in enumerate(self.fitted_columns.keys()):
             extinction_if_needed = None

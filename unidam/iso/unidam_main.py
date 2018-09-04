@@ -139,7 +139,7 @@ class UniDAMTool(object):
             # Special columns should appear at the end
             # of fitted_columns list, and in the prescribed order.
             move_to_end(self.fitted_columns, item)
-            if item in self.fitted_columns and mf.use_photometry:
+            if item in self.fitted_columns and not mf.use_photometry:
                 raise ValueError('Distance-related output is requested, but'
                                  ' no photometry provided.')
         # This is the index of column with output model weights.
@@ -258,7 +258,6 @@ class UniDAMTool(object):
             mf.matrix_det = 1. / np.linalg.det(self.mag_matrix)
         else:
             mf.matrix_det = 0.  # Will be unsused anyway
-        print(self.mag, self.mag_err, self.Rk)
         if self.mag.size > 0:
             mf.alloc_mag(self.mag, self.mag_err, self.Rk)
         mf.alloc_param(self.param, self.param_err)
@@ -320,7 +319,6 @@ class UniDAMTool(object):
             stage_data = model_params[stages == stage]
             stage_data = stage_data[stage_data[:, self.w_column] > 0]
             # Split stage data into USPDFs
-            import ipdb; ipdb.set_trace()
             for part_data in self.split_multimodal(stage_data):
                 if np.sum(part_data[:, self.w_column]) / \
                    total_mode_weight < self.MIN_USPDF_WEIGHT:

@@ -46,7 +46,7 @@ UNITS = {'mass': 'Mass ($M_{sun}$)', 'age': 'log(age) (log years)',
 
 def plot_pdf(xid, fits, name, data, column, ax, each=False,
              total=False, correlations=False, legend=True,
-             plot_fits=True, dump='dump'):
+             plot_fits=True, plot_debug=True, dump='dump'):
 
     lcolors = {0: 'c', 1: 'r', 2: 'b', 3: 'orange'}
     label = {0: '0', 1: 'I', 2: 'II', 3: 'III'}
@@ -57,8 +57,8 @@ def plot_pdf(xid, fits, name, data, column, ax, each=False,
     bins = np.linspace(adata.min()*0.9, adata.max(), 50)
     binx = 0.5*(bins[1:] + bins[:-1])
     ns = []
-    n, _ = np.histogram(adata, bins, weights=wdata, normed=True)
-    ns.append(n)
+    #n, _ = np.histogram(adata, bins, weights=wdata, normed=True)
+    #ns.append(n)
     w = {}
     lines = []
     labels = []
@@ -71,29 +71,36 @@ def plot_pdf(xid, fits, name, data, column, ax, each=False,
         w[stage] = np.sum(n)
         if w[stage] < 0.03:
             continue
+        if not plot_debug and not plot_fits:
+            lw = 2.5
+        else:
+            lw = 1
         l = ax.step(binx, n, label='Stage %s' % label[stage], where='mid',
-                    linewidth=1., color=lcolors[stage])
+                    linewidth=lw, color=lcolors[stage])
         lines.append(l[0])
         labels.append('Stage %s' % label[stage])
         ns.append(n)
-    for row in fits:
-        if row['%s_fit' % name] == 'N':
-            continue
-        stage = row['stage']
-        l = ax.plot(row['%s_bins_debug' % name],
-                    np.array(row['%s_hist_debug' % name]) * row['uspdf_weight'],
-                    label='Stage %s' % label[stage],
-                    linewidth=1.5, color=lcolors[stage])
-        lines.append(l[0])
-        labels.append('Stage %s' % label[stage])
-        ns.append(n)
+    if plot_debug:
+        for row in fits:
+            if row['%s_fit' % name] == 'N':
+                continue
+            stage = row['stage']
+            l = ax.plot(row['%s_bins_debug' % name],
+                        np.array(row['%s_hist_debug' % name]) * row['uspdf_weight'],
+                        label='Stage %s' % label[stage],
+                        linewidth=1.5, color=lcolors[stage])
+            lines.append(l[0])
+            labels.append('Stage %s' % label[stage])
+            ns.append(n)
     ydata_total = np.zeros(len(binx))
     if plot_fits:
         for row in fits:
             ydata = get_ydata(name, row, binx)
             if ydata is None:
                 continue
-            ydata = ydata * row['uspdf_weight'] * ns[0].sum() / np.sum(ydata)
+            #ydata = ydata * row['uspdf_weight'] * ns[0].sum() / np.sum(ydata)
+            ydata = ydata * row['uspdf_weight'] * np.sum(ns) / np.sum(ydata)
+            #import ipdb; ipdb.set_trace()
             ydata_total = ydata_total + ydata
             ax.plot(binx, ydata, color=lcolors[row['stage']], linewidth=2.5)
             if correlations and (name == 'mass' or name == 'age') \
@@ -145,19 +152,18 @@ def plot_pdf(xid, fits, name, data, column, ax, each=False,
         max_x = int(2. * max_x) * 0.5
     else:
         step = 0.25 * (binx[-1] - binx[0])
-    print(name, min_x, max_x, step)
     ax.xaxis.set_ticks(np.arange(min_x, max_x+step, step))
-    ax.set_ylim(0., np.max(ns[0])*1.1)
-    ax.yaxis.set_ticks(np.linspace(0., np.max(ns[0])*1.1, 6))
+    ax.set_ylim(0., np.max(ns)*1.1)
+    ax.yaxis.set_ticks(np.linspace(0., np.max(ns)*1.1, 6))
     ax.yaxis.set_ticklabels(np.linspace(0., 1., 6))
     ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
     plt.tight_layout()
     if each:
         if legend:
-            if name == 'age':
-                plt.legend(loc='upper right')
-            else:
-                plt.legend()
+            #if name == 'age':
+            #    plt.legend(loc='upper right')
+            #else:
+            plt.legend()
         plt.tight_layout()
         plt.savefig('../iso/%s/dump_%s%s.png' % (dump, xid, name.replace('/', '_')))
         plt.clf()
@@ -188,6 +194,9 @@ if __name__ == '__main__':
     parser.add_argument('--nofit', action="store_true",
                         default=False,
                         help='Do not plot fits')
+    parser.add_argument('--nodebug', action="store_true",
+                        default=False,
+                        help='Do not plot debug histogram')
     parser.add_argument('-c', '--correlations', action="store_true",
                         default=False,
                         help='Add fits for ages and masses derived '
@@ -201,8 +210,17 @@ if __name__ == '__main__':
              'd': ('distance', 5),
              'P': ('parallax', 6)}
     if args.grid:
-        fig = plt.figure(figsize=(6, 10))
-        plt.rcParams.update({'font.size': 18})
+        if len(args.what) <= 2:
+            cols = len(args.what)
+            rows = 1
+        else:
+            cols = 2
+            rows = len(args.what) // 2 + 1
+        figsize = plt.rcParams['figure.figsize']
+        fig = plt.figure(figsize=(figsize[0] * cols, figsize[1] * rows))
+    #else:
+    #    fig = plt.figure(figsize=(4, 3))
+    plt.rcParams.update({'font.size': 18})
     if args.title is not None:
         plt.title(args.title)
 
@@ -223,7 +241,7 @@ if __name__ == '__main__':
 
         for ii, item in enumerate(plot_params):
             if args.grid:
-                ax = plt.subplot(3, 1, ii + 1)
+                ax = plt.subplot(rows, cols, ii + 1)
             else:
                 ax = plt.subplot(111)
             if item[0] not in columns:
@@ -233,12 +251,13 @@ if __name__ == '__main__':
                                      not args.grid, args.total,
                                      args.correlations,
                                      args.legend, not args.nofit,
+                                     not args.nodebug,
                                      dump=args.dump)
         if args.grid:
             if args.legend:
                 leg = plt.figlegend(lines, labels, loc=(0.05, 0.01),
                                     ncol=4, frameon=False)
-                fig.subplots_adjust(bottom=0.15)
+                fig.subplots_adjust(bottom=0.25)
                 fig.savefig('../iso/%s/dump_%s.png' % (args.dump, xid),
                             bbox_extra_artists=(leg,), bbox_inches='tight')
             else:

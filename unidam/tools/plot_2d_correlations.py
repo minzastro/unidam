@@ -18,6 +18,12 @@ UNITS = {'mass': 'Mass ($M_{sun}$)', 'age': 'log(age) (log years)',
          'distance_modulus': 'Distance modulus (mag)',
          'distance': 'Distance (pc)'}
 
+def remove_last_label(ax):
+    ylabels = ax.get_xticklabels()
+    ylabels[-1].set_label('') 
+    ax.set_xticklabels(ylabels)
+
+STAGE_CMAPS = {1: 'Reds', 2: 'Blues', 3: 'Oranges'}
 
 def plot_pdf(xid, name, data, column, axes, correlations=True,
              stage_list=[1, 2, 3], labels=False):
@@ -40,11 +46,12 @@ def plot_pdf(xid, name, data, column, axes, correlations=True,
         else:
             ax = axes
         if (stages == stage).sum() > 0:
-            cm = plt.cm.ScalarMappable(cmap='Greys')
+            cm = plt.cm.ScalarMappable(cmap=STAGE_CMAPS[stage])
             cm.set_clim(vmin=0, vmax=wmax)
             _, _, _, im = ax.hist2d(xdata[stages == stage],
                                     adata[stages == stage],
-                                    bins=bins, cmap=cm.cmap, vmax=wmax,
+                                    bins=bins, cmap=cm.cmap,
+                                    vmax=wmax,
                                     norm=LogNorm(vmax=wmax),
                                     weights=wdata[stages == stage])
         xvalues = np.linspace(xdata.min(), xdata.max(), 10)
@@ -88,18 +95,21 @@ def plot_pdf(xid, name, data, column, axes, correlations=True,
         r_from = int(xdata.min()) - 1
         r_to = int(xdata.max()) + 1
         if r_to - r_from > 4:
-            step = ((r_to - r_from) / 5) + 1
+            step = ((r_to - r_from) / 6) + 1
         elif r_to - r_from > 1.5:
             step = 0.5
         else:
             step = 0.2
-        ticks = np.arange(r_from, r_to+step, step)
+        ticks = np.arange(r_from, r_to-step * .1, step)
+        print(ticks)
         ax.set_xticks(ticks)
         if column == 2 or len(stage_list) == 1:
-            ax.set_xticklabels(ticks)
+            ax.set_xticklabels(['%.0f' % t for t in ticks])
             ax.set_xlabel('Distance modulus')
         else:
+            ax.set_xticklabels([])
             ax.set_title('Stage %s' % ('I'*stage))
+        #remove_last_label(ax)
     return im
 
 

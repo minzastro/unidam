@@ -21,7 +21,7 @@ try:
         return result
 except ImportError:
     from unidam.utils.skewnorm_local import skewnorm_local as sn
-
+    
     def skew_gauss(x, mu, sigma, alpha):
         """
         Skewed Gaussian distribution.
@@ -46,6 +46,11 @@ except ImportError:
 
 
 def trunc_line(xin, val, val2, lower, upper):
+    """
+    Trapezoidal distribution:
+    f(x) = val * x + val2, if lower <= x <= upper,
+           0, otherwise.
+    """
     result = np.zeros_like(xin)
     mask = (xin >= lower) * (xin <= upper)
     result[mask] = np.polyval([val, val2], xin[mask])
@@ -55,7 +60,7 @@ def trunc_line(xin, val, val2, lower, upper):
 
 def do_fit_linear(xin, yin):
     """
-    Fit a line
+    Fit a trunc_line function.
     """
     lower = 0
     upper = len(xin)

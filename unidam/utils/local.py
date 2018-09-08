@@ -1,7 +1,5 @@
-from __future__ import division
-from __future__ import unicode_literals
-from __future__ import print_function
-from __future__ import absolute_import
+from __future__ import division, unicode_literals, print_function, \
+    absolute_import
 from future import standard_library
 standard_library.install_aliases()
 import numpy as np
@@ -15,6 +13,12 @@ from unidam.utils.trunc_line import TruncLine
 def get_param(fit, par):
     """
     Convert parameters from DB to distribution parameters.
+      S: skew-normal distribution,
+      F: trapezoidal distribution,
+      G: Gaussian (normal) distribution,
+      T: truncated normal distribution,
+      P: truncated Student's t-distribution,
+      L: truncated Laplacian (exponent) distribution.
     """
     if fit == 'S':
         return skewnorm, [par[2], par[0], par[1]]
@@ -43,7 +47,24 @@ def get_param(fit, par):
     return None
 
 
+def get_ydata(name, row, binx):
+    """
+    Prepare Y-data from PDF fitting function.
+    """
+    if row['%s_fit' % name] in 'GSTPLF':
+        func, par = get_param(row['%s_fit' % name], row['%s_par' % name])
+        ydata = func.pdf(binx, *par)
+        if np.any(ydata) < 0:
+            print(name, ydata)
+    else:
+        ydata = np.zeros_like(binx)
+    return ydata
+
+
 def vargauss_filter1d(xinput, yinput, sigma):
+    """
+    Gaussian kernel smooth for unequally-spaced grid.
+    """
     output = np.zeros_like(xinput)
     for ind, item in enumerate(yinput):
         local_sigma = (sigma * xinput[ind])**2

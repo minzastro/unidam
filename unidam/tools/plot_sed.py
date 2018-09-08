@@ -28,6 +28,9 @@ parser.add_argument('--log', action="store_true",
                     help='Log scale X axis')
 parser.add_argument('-d', '--dump', type=str, default='dump',
                     help='Dump folder name')
+parser.add_argument('--dev', action="store_true",
+                    default=False,
+                    help='Use development file path')
 
 parser.add_argument('rest', nargs=argparse.REMAINDER)
 args = parser.parse_args()
@@ -55,9 +58,12 @@ if args.input is None:
         ids += arg.split(',')
 else:
     ids = args.input.split(',')
+folder = args.dump
+if args.dev:
+    folder = f'../iso/{folder}'
 for id in ids:
     print(id)
-    data = json.load(open('../iso/%s/dump_%s.json' % (args.dump, id)))
+    data = json.load(open('%s/dump_%s.json' % (folder, id)))
     bands = []
     xbands = []
     for b, freq in BAND_POS.items():
@@ -69,8 +75,8 @@ for id in ids:
     bands = bands[np.argsort(xbands)]
     xbands = xbands[np.argsort(xbands)]
     fig = plt.figure()
-    ax1 = plt.subplot2grid((2,1), (0,0))
-    ax2 = plt.subplot2grid((2,1), (1,0), sharex=ax1)
+    ax1 = plt.subplot2grid((2, 1), (0, 0))
+    ax2 = plt.subplot2grid((2, 1), (1, 0), sharex=ax1)
     colors = list('brm')
     for irow, row in enumerate(data):
         obs = [row['sed_debug']['Observed'][b] for b in bands]
@@ -80,12 +86,12 @@ for id in ids:
         err = np.sqrt(err**2 + perr**2)
         ax1.scatter(xbands, obs,
                     s=(plt.rcParams['lines.markersize']*1.5)**2,
-                    edgecolor='black', facecolors='none',
-                      )
+                    edgecolor='black', facecolors='none')
         ax1.plot(xbands, pred, '-+',
-                 color=colors[irow])
+                 color='C%s' % irow)
         ax2.errorbar(xbands, np.array(obs)-np.array(pred), yerr=err,
-                      label='Stage=%s' % int(row['stage']), color=colors[irow])
+                     label='Stage=%s' % int(row['stage']),
+                     color='C%s' % irow)
         ax2.axhline(0, color='grey')
     ax1.set_ylabel('Visible magnitudes')
     ax2.set_ylabel('Offset')
@@ -97,4 +103,4 @@ for id in ids:
         ax2.set_xscale('log')
     fig.subplots_adjust(hspace=0)
     plt.setp(ax1.get_xticklabels(), visible=False)
-    plt.savefig('../iso/%s/dump_%s.sed.png' % (args.dump, id))
+    plt.savefig('%s/dump_%s.sed.png' % (folder, id))

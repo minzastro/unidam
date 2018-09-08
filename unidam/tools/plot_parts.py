@@ -18,22 +18,8 @@ import numpy as np
 import pylab as plt
 import simplejson as json
 import argparse
-from unidam.utils.local import get_param
+from unidam.utils.local import get_param, get_ydata
 from matplotlib.ticker import FormatStrFormatter
-
-def get_ydata(name, row, binx):
-    """
-    Prepare Y-data from PDF fitting function.
-    """
-    if row['%s_fit' % name] in 'GSTPLF':
-        func, par = get_param(row['%s_fit' % name], row['%s_par' % name])
-        ydata = func.pdf(binx, *par)
-        if np.any(ydata) < 0:
-            print(name, ydata)
-    else:
-        ydata = np.zeros_like(binx)
-    return ydata
-
 
 #plt.rc('text', usetex=True)  # Commented out for performance
 plt.rc('font', family='serif')
@@ -57,8 +43,6 @@ def plot_pdf(xid, fits, name, data, column, ax, each=False,
     bins = np.linspace(adata.min()*0.9, adata.max(), 50)
     binx = 0.5*(bins[1:] + bins[:-1])
     ns = []
-    #n, _ = np.histogram(adata, bins, weights=wdata, normed=True)
-    #ns.append(n)
     w = {}
     lines = []
     labels = []
@@ -80,6 +64,7 @@ def plot_pdf(xid, fits, name, data, column, ax, each=False,
         lines.append(l[0])
         labels.append('Stage %s' % label[stage])
         ns.append(n)
+    fit_norm = np.sum(ns)
     if plot_debug:
         for row in fits:
             if row['%s_fit' % name] == 'N':
@@ -98,9 +83,7 @@ def plot_pdf(xid, fits, name, data, column, ax, each=False,
             ydata = get_ydata(name, row, binx)
             if ydata is None:
                 continue
-            #ydata = ydata * row['uspdf_weight'] * ns[0].sum() / np.sum(ydata)
-            ydata = ydata * row['uspdf_weight'] * np.sum(ns) / np.sum(ydata)
-            #import ipdb; ipdb.set_trace()
+            ydata = ydata * row['uspdf_weight'] * fit_norm / np.sum(ydata)
             ydata_total = ydata_total + ydata
             ax.plot(binx, ydata, color=lcolors[row['stage']], linewidth=2.5)
             if correlations and (name == 'mass' or name == 'age') \
@@ -125,6 +108,7 @@ def plot_pdf(xid, fits, name, data, column, ax, each=False,
             line = plt.plot(binx, ydata_total, color='black', linestyle='--')
             lines.append(line[0])
             labels.append('Total')
+        ns.append(n_total)
     for axis in ['top', 'bottom', 'left', 'right']:
         ax.spines[axis].set_linewidth(1.5)
     if name in UNITS:
@@ -160,12 +144,9 @@ def plot_pdf(xid, fits, name, data, column, ax, each=False,
     plt.tight_layout()
     if each:
         if legend:
-            #if name == 'age':
-            #    plt.legend(loc='upper right')
-            #else:
             plt.legend()
         plt.tight_layout()
-        plt.savefig('../iso/%s/dump_%s%s.png' % (dump, xid, name.replace('/', '_')))
+        plt.savefig('%s/dump_%s%s.png' % (dump, xid, name.replace('/', '_')))
         plt.clf()
     return lines, labels
 
@@ -179,7 +160,13 @@ if __name__ == '__main__':
     parser.add_argument('--title', type=str, default=None,
                         help='Title to add at the top')
     parser.add_argument('-w', '--what', type=str, default='AMD',
-                        help='What to plot')
+                        help="""What to plot:
+                            A: age,
+                            M: mass,
+                            D: distance_modulus,
+                            E: extinction,
+                            d: distance,
+                            P: parallax""")
     parser.add_argument('-d', '--dump', type=str, default='dump',
                         help='Dump folder name')
     parser.add_argument('-g', '--grid', action="store_true",
@@ -200,8 +187,15 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--correlations', action="store_true",
                         default=False,
                         help='Add fits for ages and masses derived '
-                             'from relation to distance')
+                             'from their correlation with distance')
+    parser.add_argument('--dev', action="store_true",
+                        default=False,
+                        help='Use development file path')
     args = parser.parse_args()
+
+    folder = args.dump
+    if args.dev:
+        folder = f'../iso/{folder}'
 
     PLOTS = {'A': ('age', 1),
              'M': ('mass', 2),
@@ -218,18 +212,15 @@ if __name__ == '__main__':
             rows = len(args.what) // 2 + 1
         figsize = plt.rcParams['figure.figsize']
         fig = plt.figure(figsize=(figsize[0] * cols, figsize[1] * rows))
-    #else:
-    #    fig = plt.figure(figsize=(4, 3))
     plt.rcParams.update({'font.size': 18})
     if args.title is not None:
         plt.title(args.title)
 
     for xid in args.input.split(','):
-        data_name = '../iso/%s/dump_%s.dat' % (args.dump, xid)
+        data_name = '%s/dump_%s.dat' % (folder, xid)
         columns = open(data_name, 'r').readline()[2:].split()
         data = np.loadtxt(data_name)
-        fits = json.load(open('../iso/%s/dump_%s.json' % (args.dump, xid),
-                              'r'))
+        fits = json.load(open('%s/dump_%s.json' % (folder, xid), 'r'))
         plot_params = []
         for name in args.what:
             if name in PLOTS:
@@ -252,15 +243,15 @@ if __name__ == '__main__':
                                      args.correlations,
                                      args.legend, not args.nofit,
                                      not args.nodebug,
-                                     dump=args.dump)
+                                     dump=folder)
         if args.grid:
             if args.legend:
                 leg = plt.figlegend(lines, labels, loc=(0.05, 0.01),
                                     ncol=4, frameon=False)
                 fig.subplots_adjust(bottom=0.25)
-                fig.savefig('../iso/%s/dump_%s.png' % (args.dump, xid),
+                fig.savefig('%s/dump_%s.png' % (folder, xid),
                             bbox_extra_artists=(leg,), bbox_inches='tight')
             else:
-                fig.savefig('../iso/%s/dump_%s.png' % (args.dump, xid),
+                fig.savefig('%s/dump_%s.png' % (folder, xid),
                             bbox_inches='tight')
             plt.clf()

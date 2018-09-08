@@ -18,11 +18,6 @@ UNITS = {'mass': 'Mass ($M_{sun}$)', 'age': 'log(age) (log years)',
          'distance_modulus': 'Distance modulus (mag)',
          'distance': 'Distance (pc)'}
 
-def remove_last_label(ax):
-    ylabels = ax.get_xticklabels()
-    ylabels[-1].set_label('') 
-    ax.set_xticklabels(ylabels)
-
 STAGE_CMAPS = {1: 'Reds', 2: 'Blues', 3: 'Oranges'}
 
 def plot_pdf(xid, name, data, column, axes, correlations=True,
@@ -109,7 +104,6 @@ def plot_pdf(xid, name, data, column, axes, correlations=True,
         else:
             ax.set_xticklabels([])
             ax.set_title('Stage %s' % ('I'*stage))
-        #remove_last_label(ax)
     return im
 
 
@@ -126,24 +120,33 @@ parser.add_argument('-c', '--correlations', action="store_true",
 parser.add_argument('-l', '--labels', action="store_true",
                     default=False,
                     help='Add labels with scatter values')
+parser.add_argument('-d', '--dump', type=str, default='dump',
+                    help='Dump folder name')
+parser.add_argument('--dev', action="store_true",
+                    default=False,
+                    help='Use development file path')
 args = parser.parse_args()
+
+folder = args.dump
+if args.dev:
+    folder = f'../iso/{folder}'
 
 #fig = plt.figure(figsize=(12, 8))
 #plt.rc('text', usetex=True)
 plt.rc('font', family='serif')
 plt.rcParams.update({'font.size': 18})
 for xid in args.input.split(','):
-    data = np.loadtxt('../iso/dump/dump_%s.dat' % xid)
-    fits = json.load(open('../iso/dump/dump_%s.json' % xid, 'r'))
+    data = np.loadtxt('%s/dump_%s.dat' % (folder, xid))
+    fits = json.load(open('%s/dump_%s.json' % (folder, xid), 'r'))
     fits = [xfits if str(xfits['id']).strip() == xid
             else None for xfits in fits]
     if args.stage is None:
         fig, axes = plt.subplots(2, 3, figsize=(12, 8))
         for ii, item in enumerate([('age', 1), ('mass', 2)]):
-            im = plot_pdf(xid, item[0], data, item[1], axes, args.correlations,
-                          labels=args.labels)
+            im = plot_pdf(xid, item[0], data, item[1], axes,
+                          args.correlations, labels=args.labels)
         fig.subplots_adjust(hspace=0, wspace=0)
-        output_name = '../iso/dump/dump_%s_correlations.png' % xid
+        output_name = '%s/dump_%s_correlations.png' % (folder, xid)
         cax, kw = make_axes([ax for ax in axes.flat])
         cbar = plt.colorbar(im, cax=cax, use_gridspec=True, **kw)
         cbar.set_label('PDF')
@@ -152,9 +155,11 @@ for xid in args.input.split(','):
     else:
         for column, col_index in [('age', 1), ('mass', 2)]:
             fig, axes = plt.subplots()
-            im = plot_pdf(xid, column, data, col_index, axes, args.correlations,
-                          [args.stage], labels=args.labels)
-            output_name = '../iso/dump/dump_%s_correlations_%d_%s.png' % (xid, args.stage, column)
+            im = plot_pdf(xid, column, data, col_index, axes,
+                          args.correlations, [args.stage],
+                          labels=args.labels)
+            output_name = '%s/dump_%s_correlations_%d_%s.png' % (
+                folder, xid, args.stage, column)
             cbar = plt.colorbar(im)
             cbar.set_label('PDF')
             plt.tight_layout()

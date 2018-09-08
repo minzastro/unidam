@@ -30,6 +30,14 @@ from unidam.utils import constants
 from unidam.utils.local import vargauss_filter1d
 
 
+def ensure_dir(directory):
+    """
+    Create directory if it does not exist.
+    """
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+
 class NumpyAwareJSONEncoder(json.JSONEncoder):
     """
     JSON encoder which supports numpy values.
@@ -909,6 +917,7 @@ class UniDAMTool(object):
         idstr = str(row[self.id_column]).strip()
         dump_array = list(range(self.w_column + 1))
         header = '%s L_iso L_sed p_w' % ' '.join(list(self.fitted_columns.keys()))
+        ensure_dir(self.dump_prefix)
         np.savetxt('%s/dump_%s.dat' % (self.dump_prefix, idstr),
                    model_params[:, dump_array],
                    header=header)

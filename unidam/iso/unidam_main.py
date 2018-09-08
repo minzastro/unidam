@@ -167,8 +167,12 @@ class UniDAMTool(object):
                    for band in constants.R_FACTORS}
         self.RV = {band: constants.R_FACTORS[band] / constants.R_FACTORS['V']
                    for band in constants.R_FACTORS}
-        self._load_models(os.path.join(os.path.dirname(__file__),
-                                       config.get('general', 'model_file')))
+        model_file = config.get('general', 'model_file')
+        if not (os.path.isabs(model_file) or
+                model_file.startswith('./')):
+            model_file = os.path.join(os.path.dirname(__file__),
+                                      model_file)
+        self._load_models(model_file)
 
     def _names_to_indices(self, columns):
         """
@@ -484,6 +488,14 @@ class UniDAMTool(object):
 
     def _get_histogram(self, name, mode_data, weights, bins,
                        smooth):
+        """
+        Prepare a proper histogram for fitting.
+        params:
+            :name: parameter name, only for special treatment of
+                some parameters. E.g. for ages we use pre-defined grid,
+                
+            :mode_data:
+        """
         if name == 'age':
             # For ages we always use a fixed grid.
             bin_centers = self.age_grid
@@ -491,8 +503,8 @@ class UniDAMTool(object):
             bin_centers = 0.5 * (bins[1:] + bins[:-1])
         # We need mode_data >= bins[0], otherwise numpy behaves
         # strangely sometimes.
-        hist = np.histogram(mode_data[mode_data >= bins[0]]
-                            , bins,
+        hist = np.histogram(mode_data[mode_data >= bins[0]],
+                            bins,
                             weights=weights[mode_data >= bins[0]]
                             )[0]
         hist = hist / (hist.sum() * (bins[1:] - bins[:-1]))
@@ -714,6 +726,10 @@ class UniDAMTool(object):
         SED is calculated as a weighted mean (with scatter) for predicted
         visible magnitudes.
         """
+        if 'distance_modulus' not in self.fitted_columns:
+            raise ValueError('Cannot produce SED -- no distance estimate')
+        elif 'extinction' not in self.fitted_columns:
+            raise ValueError('Cannot produce SED -- no extinction estimate')
         mdata = mf.models[np.asarray(adata[:, self.w_column + 1] - 1, dtype=int)]
         dm = adata[:, list(self.fitted_columns.keys()).index('distance_modulus')]
         ext = adata[:, list(self.fitted_columns.keys()).index('extinction')]

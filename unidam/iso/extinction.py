@@ -3,6 +3,10 @@
 """
 Created on Fri Aug 19 15:34:12 2016
 
+Module to get Schlegel extinction for
+given coordinates.
+Only used to prepare input files for UniDAM,
+if extinctions are not included. 
 @author: mints
 """
 from __future__ import unicode_literals

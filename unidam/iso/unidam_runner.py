@@ -8,12 +8,9 @@ Created on Fri May 20 13:09:00 2016
 Script to run distance estimator for various regimes from
 the command-line.
 """
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import division
-from __future__ import absolute_import
-from builtins import zip
-from builtins import int
+from __future__ import print_function, unicode_literals, division, \
+    absolute_import
+from builtins import zip, int
 from future import standard_library
 standard_library.install_aliases()
 import numpy as np
@@ -31,19 +28,21 @@ np.set_printoptions(linewidth=200)
 parser = argparse.ArgumentParser(description="""
 Tool to estimate distances to stars.
 """, formatter_class=argparse.RawDescriptionHelpFormatter)
-parser.add_argument('-i', '--input', type=str, default=None,
-                    required=True, help='Input file name')
+parser.add_argument('-i', '--input', type=str,
+                    required=True,
+                    help='Input file name (any astropy-readable table)')
 parser.add_argument('-o', '--output', type=str, default='result.fits',
                     help='Output file name')
 parser.add_argument('-c', '--config', type=str,
-                    required=True, default=None,
+                    required=True,
                     help='Config file name')
 parser.add_argument('--id', type=str, default=None,
                     help='Run for just a single ID or a comma-separated list of IDs')
-parser.add_argument('-d', '--dump-results', action="store_true",
+group = parser.add_mutually_exclusive_group()
+group.add_argument('-d', '--dump-results', action="store_true",
                     default=False,
                     help='Dump model data for each star')
-parser.add_argument('-p', '--parallel', action="store_true",
+group.add_argument('-p', '--parallel', action="store_true",
                     default=False,
                     help='Run in parallel (uses OMP_NUM_THREADS if given, otherwise 2 threads)')
 args = parser.parse_args()
@@ -52,8 +51,7 @@ with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     data = Table.read(args.input)
 de = UniDAMTool(config_filename=args.config)
-
-de.id_column = 'id'
+de.id_column = 'id'  # Default ID column.
 idtype = data.columns[de.id_column].dtype
 final = de.get_table(data, idtype)
 unfitted = Table()
@@ -124,6 +122,8 @@ else:
         # if a debug-mode is switched on for a complete survey.
         mf.debug = args.dump_results
     else:
+        print("Warning, dumping of results is allowed only if ID list"
+              " is provided. Disabling result dumps")
         mf.debug = False
     i = 0
     for xrow in data:
@@ -150,7 +150,8 @@ else:
 if os.path.exists(args.output):
     os.remove(args.output)
 final.meta = vars(args)
-final.write(args.output, format='fits')
+unfitted.meta = vars(args)
+final.write(args.output)
 if os.path.exists('%s_unfitted.fits' % args.output):
     os.remove('%s_unfitted.fits' % args.output)
 unfitted.write('%s_unfitted.fits' % args.output)

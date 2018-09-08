@@ -20,7 +20,7 @@ from astropy.coordinates import SkyCoord
 from astropy.utils.exceptions import AstropyWarning
 from astroquery.xmatch import XMatch
 from configobj import ConfigObj
-from sage.iso import extinction
+from unidam.iso import extinction
 import warnings
 
 warnings.filterwarnings('ignore', category=AstropyWarning)

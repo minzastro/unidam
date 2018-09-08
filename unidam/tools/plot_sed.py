@@ -16,7 +16,6 @@ standard_library.install_aliases()
 import argparse
 import simplejson as json
 import pylab as plt
-import seaborn as sns
 import numpy as np
 
 parser = argparse.ArgumentParser(description="""

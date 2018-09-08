@@ -6,14 +6,29 @@ implicit none
 
 !> All models
 real, allocatable :: models(:, :)
+
 !> This array contains a mask for models within 4 sigmas
 logical, allocatable :: mask_models(:)
-!> Parameters of the selected models (TODO: document indices)
+
+!> Special array of flags.
+!> Indicates if the following columns are needed:
+!> Distance modulus, extinction, distance, parallax
+logical, save :: special_columns(4)
+
+!> Parameters of the selected models
+!> First *size(fitted_columns)* columns are filled with
+!> model observables (Teff, logg, feh in the 'classical' case)
+!> Next 0 to 4 columns with
+!> distance modulus, extinction, distance, parallax
+!> are added depending on *special_columns* flag array values
+!> Next 4 columns are L_model, L_sed, p and model index
 real, allocatable :: model_params(:, :)
-!> Parameters for a current star (T, logg, feh)
+!> Observed parameters for a current star (T, logg, feh)
 real, allocatable :: param(:)
 !> Uncertainties of parameters for a current star (T, logg, feh)
 real, allocatable :: param_err(:)
+
+!> Wether to add L_sed to L_model
 logical, save :: use_photometry = .true.
 !> Visible magnitudes for a current star
 real, allocatable :: mag(:)
@@ -43,10 +58,6 @@ logical, save :: use_magnitude_probability = .true.
 logical, save :: debug = .false.
 !> Allow for negative extinctions when solving for distances
 logical, save :: allow_negative_extinction = .false.
-!> Special array of flags.
-!> Indicates if the following columns are needed:
-!> Distance modulus, extinction, distance, parallax
-logical, save :: special_columns(4)
 
 !> Flag indicating if the parallax is known
 logical, save :: parallax_known = .false.
@@ -167,7 +178,7 @@ subroutine solve_for_distance_with_parallax(vector, solution)
         REAL, INTENT(OUT)   :: fvec(n)
         INTEGER, INTENT(IN OUT)  :: iflag
         real extra, pi
-          pi = 10**(-0.2 * x(1) - 1.)
+          pi = 1./mu_d_to_distance(x(1))
           if (X(2) .ge. extinction) then
             extra = (X(2) - extinction) / extinction_error**2
           else
@@ -187,6 +198,39 @@ subroutine solve_for_distance_with_parallax(vector, solution)
 end subroutine solve_for_distance_with_parallax
 
 
+subroutine get_vector(i, vector, L_sednoext, mu_d_noext)
+!! Get vector for mu_d/extinction system of eq.
+!! and L_sednoext = L_sed with zero extinction.
+  integer, intent(in) :: i
+  real, intent(out) :: L_sednoext 
+  real, intent(out) :: vector(2)
+  real, intent(out) :: mu_d_noext
+    if (parallax_known) then
+      vector(1) = sum((mag - models(i, abs_mag))*mag_err)
+      vector(2) = sum((mag - models(i, abs_mag))*mag_err*Ck)
+      mu_d_noext = vector(1) / matrix0(1, 1)
+      L_sednoext = 0.5 * sum((mag - mu_d_noext - models(i, abs_mag))**2 * mag_err) + &
+                   0.5 * (1. / mu_d_to_distance(mu_d_noext) - parallax)**2 / (parallax_error**2) + &
+                   parallax_L_correction
+    else ! No distance or parallax known
+      vector(1) = sum((mag - models(i, abs_mag))*mag_err)
+      if (distance_prior.eq.1) then
+        vector(1) = vector(1) + log(10.)*0.4
+      else if (distance_prior.eq.2) then
+        vector(1) = vector(1) + 0.2 * log(10.) * (2. - mu_d_to_distance(mu_d_noext)/prior_parameter) 
+      endif
+      vector(2) = sum((mag - models(i, abs_mag))*mag_err*Ck)
+      mu_d_noext = vector(1) / matrix0(1, 1)
+      L_sednoext = 0.5 * sum((mag - mu_d_noext - models(i, abs_mag))**2 * mag_err)
+    endif
+end subroutine get_vector
+
+real function mu_d_to_distance(mu)
+  !! Convert distance modulus to distance
+  real, intent(in) :: mu
+    mu_d_to_distance = 10**(mu*0.2 + 1)
+end function mu_d_to_distance
+
 subroutine find_best(m_count)
   !! Finding stellar parameters from observed + models
   !> Maximum number of parameters for output
@@ -196,18 +240,19 @@ subroutine find_best(m_count)
   integer i
   integer off, prob
   real p, distance
-  real L_model, L_sed, L_sednoext, bic2, bic1
+  real L_model, L_sed, bic2, bic1
+  real L_sednoext, mu_d_noext ! L_sed and mu_d if extinction == zero
   real vector(2)
-  real mu_d(2), mu_d_noext ! (mu_d, Av)
+  real mu_d(2) ! (mu_d, Av)
     if (allocated(model_params)) then
       deallocate(model_params)
     endif
-    allocate(model_params(size(mask_models), WSIZE))
     ! First we filter out models by *max_param_err* times sigma
     do i = 1, size(param)
       mask_models = mask_models .and. (abs(models(:, model_columns(i)) - param(i)).le.(max_param_err*param_err(i)))
     enddo
     prob = size(fitted_columns) + count(special_columns) + 1 ! Here probablities start
+    allocate(model_params(size(mask_models), prob + 3))
     m_count = 1
     do i = 1, size(mask_models)
       if (mask_models(i)) then ! Take only filtered models
@@ -222,27 +267,20 @@ subroutine find_best(m_count)
         off = size(fitted_columns)
         model_params(m_count, :off) = models(i, fitted_columns)
         if (use_photometry) then
-            if (parallax_known) then
-              vector(1) = sum((mag - models(i, abs_mag))*mag_err)
-              vector(2) = sum((mag - models(i, abs_mag))*mag_err*Ck)
-              mu_d_noext = vector(1) / matrix0(1, 1)
-              L_sednoext = 0.5*sum((mag - mu_d_noext - models(i, abs_mag))**2 * mag_err)
-            else ! No distance or parallax known
-              vector(1) = sum((mag - models(i, abs_mag))*mag_err)
-              if (distance_prior.eq.1) then
-                vector(1) = vector(1) + log(10.)*0.4
-              endif
-              vector(2) = sum((mag - models(i, abs_mag))*mag_err*Ck)
-              mu_d_noext = vector(1) / matrix0(1, 1)
-              L_sednoext = 0.5*sum((mag - mu_d_noext - models(i, abs_mag))**2 * mag_err)
-            endif
+            call get_vector(i, vector, L_sednoext, mu_d_noext)
             if ((size(mag_err).ge.2).or.(parallax_known)) then
               if (parallax_known) then
                   bic1 = 1e10
+                  ! This is just first guess, so abs(parallax) is Ok.
                   mu_d(1) = -5. * (log10(abs(parallax)) + 1.)
                   mu_d(2) = extinction
                   call solve_for_distance_with_parallax(vector, mu_d)
                   L_sed = 0.5*sum((mag - mu_d(1) - models(i, abs_mag) - Ck * mu_d(2))**2 * mag_err)
+                  L_sed = L_sed + 0.5 * (1. / mu_d_to_distance(mu_d(1)) - parallax)**2 / (parallax_error**2)
+                  if (mu_d(2) .ge. extinction) then
+                      L_sed = L_sed + 0.5 * (mu_d(2) - extinction)**2 / (extinction_error**2)
+                  endif
+                  L_sed = L_sed + parallax_L_correction
               else
                   ! If there are 2 or more bands observed
                   ! then we can solve eq. 15
@@ -275,7 +313,7 @@ subroutine find_best(m_count)
                 model_params(m_count, off) = mu_d(2)
             endif
             ! Distance
-            distance = 10**(mu_d(1)*0.2 + 1)
+            distance = mu_d_to_distance(mu_d(1))
             if (special_columns(3)) then
                 off = off + 1
                 model_params(m_count, off) = distance
@@ -284,15 +322,6 @@ subroutine find_best(m_count)
             if (special_columns(4)) then
                 off = off + 1
                 model_params(m_count, off) = 1. / distance
-            endif
-            ! Unweighted isochrone likelihood
-            if (parallax_known) then
-                L_sed = L_sed + 0.5 * (1. / distance - parallax)**2 / (parallax_error**2)
-                if (mu_d(2) .ge. extinction) then
-                    L_sed = L_sed + 0.5 * (mu_d(2) - extinction)**2 / (extinction_error**2)
-                endif
-                L_sed = L_sed + parallax_L_correction
-                !write(45, *) L_sed, parallax_L_correction, parallax, parallax_error
             endif
         else
             L_sed = 0

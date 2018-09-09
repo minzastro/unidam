@@ -3,6 +3,7 @@
 *.fits
 *.npy
 *.so
+*.mod
 *.png
 .kdev4
 *.kdev4

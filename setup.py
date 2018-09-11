@@ -33,11 +33,15 @@ setup(name='unidam',
                                    '*.so'],
                     '': ['DEPENDENCIES']},
       include_package_data=True,
-      #ext_modules=[model_fitter],
       install_requires=[
           'numpy', 'scipy', 'astropy',
           'simplejson', 'healpy', 'matplotlib',
           'colorlog', 'argparse'
+      ],
+      classifiers=[
+          "Programming Language :: Python :: 3",
+          "License :: OSI Approved :: MIT License",
+          "Operating System :: OS Independent",
       ],
       scripts=['unidam/iso/unidam_runner.py',
                'unidam/tools/plot_2d_correlations.py',

@@ -501,7 +501,7 @@ class UniDAMTool(object):
         params:
             :name: parameter name, only for special treatment of
                 some parameters. E.g. for ages we use pre-defined grid,
-                
+
             :mode_data:
         """
         if name == 'age':
@@ -820,13 +820,9 @@ class UniDAMTool(object):
         smooth_extinction = np.atleast_1d(smooth_extinction)
         best_model = np.argmin(xdata[:, self.w_column - 1] +
                                xdata[:, self.w_column - 2])
-        l_sed = xdata[best_model, self.w_column - 1]
-        l_best = l_sed + xdata[best_model, self.w_column - 2]
         new_result = {'stage': xdata[0, 0],
                       'uspdf_points': xdata.shape[0],
                       'uspdf_weight': np.sum(xdata[:, self.w_column]) / wtotal,
-                     # 'p_sed': 1. - chi2.cdf(2. * l_sed, dof),
-                     # 'p_best': 1. - chi2.cdf(2. * l_best, dof + 3),
                      }
         new_result.update(self.get_psed_pbest(xdata, dof))
         if self.dump and self.mag.size > 0:

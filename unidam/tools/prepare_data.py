@@ -4,13 +4,13 @@
 Created on Wed Feb 21 10:43:39 2018
 
 @author: mints
-Tool to prepare files for UniDAM. 
+Tool to prepare files for UniDAM.
 UniDAM takes as an input a FITS file of a pre-defined structure.
 This tool helps to prepare such files from user data.
 Photometry is created automatically by cross-matching
-with 2MASS and AllWISE. Gaia DR2 cross-match is also done 
+with 2MASS and AllWISE. Gaia DR2 cross-match is also done
 (this should be optional...).
-If provided in config, galactic coordinates are taken from 
+If provided in config, galactic coordinates are taken from
 input file, otherwise they are calculated.
 
 An example of config file:
@@ -40,11 +40,12 @@ import argparse
 import numpy as np
 from astropy import units as u
 from astropy.table import Table, Column
+from astropy.table import join as astropy_join
 from astropy.coordinates import SkyCoord
 from astropy.utils.exceptions import AstropyWarning
 from astroquery.xmatch import XMatch
 from configobj import ConfigObj
-from unidam.iso import extinction
+import healpy as hp
 import warnings
 
 warnings.filterwarnings('ignore', category=AstropyWarning)
@@ -59,53 +60,80 @@ parser.add_argument('-o', '--output', type=str, required=True,
                     help='Output filename')
 parser.add_argument('-c', '--config', type=str, default='default.conf',
                     help='Config filename')
-parser.add_argument('--ra', type=str, default='RAJ2000',
+parser.add_argument('--ra', type=str, default=None,
                     help='RA column name')
-parser.add_argument('--dec', type=str, default='DEJ2000',
+parser.add_argument('--dec', type=str, default=None,
                     help='DEC column name')
 parser.add_argument('-f', '--force', action="store_true",
                     default=False,
                     help='Overwrite output file if exists')
 args = parser.parse_args()
 
-extinction.init()
 
 data = Table.read(args.input)
 config = ConfigObj(args.config)
 if 'keep' in config:
-    data.keep_columns(config['keep'])
+    keep = config['keep'].split(',')
+else:
+    keep = []
+
+if args.ra is None:
+    ra = config['mapping']['ra']
+else:
+    ra = args.ra
+if args.dec is None:
+    dec = config['mapping']['dec']
+else:
+    dec = args.dec
+
 for key, value in list(config['mapping'].items()):
-    if value.startswith('!'):
+    if '!' in value:
+        colname, systematics = value.split('!')
+        coldata = np.ones(len(data)) * float(systematics)
+        if len(colname) > 0:
+            coldata = np.sqrt(coldata**2 + data[colname]**2)
         data.add_column(Column(name=key,
-                               data=np.ones(len(data)) * float(value[1:])))
+                               data=coldata))
     elif value in data.colnames:
         if value != key:
             data.rename_column(value, key)
     else:
-        raise ValueError('%s not in table' % key)
-
+        raise ValueError('%s not in table' % value)
+    print(f'Produced {key} from {value}')
+    keep.append(key)
 if 'galactic' in config:
-    data.rename_column([config['galactic']['longitude']], 'l')
-    data.rename_column([config['galactic']['lattitude']], 'b')
+    #import ipdb; ipdb.set_trace()
+    data.rename_column(config['galactic']['longitude'], 'l')
+    data.rename_column(config['galactic']['lattitude'], 'b')
 else:
     data[args.ra].unit = u.degree
     data[args.dec].unit = u.degree
-    c = SkyCoord(ra=data[args.ra],
-                 dec=data[args.dec],
-                 frame='icrs')
+    c = SkyCoord(ra=data[ra], dec=data[dec], frame='icrs')
     data['l'] = c.galactic.l.degree
     data['b'] = c.galactic.b.degree
+keep.extend(['l', 'b'])
+
+print(keep)
+data.keep_columns(set(keep))
 
 def clean(table):
     for column in ['RAJ2000_2', 'DEJ2000_2', 'l_2', 'b_2']:
         if column in table.colnames:
             table.remove_column(column)
 
+print('Adding extinction data')
+data.add_column(Column(name='pix',
+                       data=hp.ang2pix(512,
+                                       data['l'], data['b'], lonlat=True)))
+extinction_data = Table.read('/home/mints/data/extinction/lambda_sfd_ebv_Ak.fits')
+
+data = astropy_join(data, extinction_data, keys=('pix'), join_type='left')
+
 print('XMatching with 2MASS')
 data = XMatch.query(cat1=data,
                     cat2='vizier:II/246/out',
                     max_distance=3 * u.arcsec,
-                    colRA1=args.ra, colDec1=args.dec,
+                    colRA1=ra, colDec1=dec,
                     responseformat='votable',
                     selection='best')
 data.remove_columns(['angDist',
@@ -116,7 +144,7 @@ print('XMatching with AllWISE')
 data = XMatch.query(cat1=data,
                     cat2='vizier:II/328/allwise',
                     max_distance=3 * u.arcsec,
-                    colRA1=args.ra, colDec1=args.dec,
+                    colRA1=ra, colDec1=dec,
                     responseformat='votable',
                     selection='best')
 bad_col = ['%smag_2' % b for b in 'JHK'] + ['e_%smag_2' % b for b in 'JHK']
@@ -130,7 +158,7 @@ data.remove_columns(['angDist',
 # TODO: make this an option.
 print('XMatching with Gaia')
 data = XMatch.query(cat1=data,
-                    cat2='vizier:I/337/gaia',
+                    cat2='vizier:I/345/gaia2',
                     max_distance=3 * u.arcsec,
                     colRA1=args.ra, colDec1=args.dec,
                     responseformat='votable',
@@ -145,12 +173,6 @@ data.remove_columns(['ra_ep2000', 'dec_ep2000',
 clean(data)
 data['parallax'] *= 1e-3
 data['parallax_error'] *= 1e-3
-print('Adding extinction data')
-extinction_data = extinction.get_schlegel_Av(data['l'],
-                                             data['b'],
-                                             uncertainty=True)
-data['extinction'] = extinction_data[:, 0]
-data['extinction_error'] = extinction_data[:, 1]
 if args.force and os.path.exists(args.output):
     os.remove(args.output)
 data.write(args.output)

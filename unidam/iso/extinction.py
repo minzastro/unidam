@@ -6,7 +6,7 @@ Created on Fri Aug 19 15:34:12 2016
 Module to get Schlegel extinction for
 given coordinates.
 Only used to prepare input files for UniDAM,
-if extinctions are not included. 
+if extinctions are not included.
 @author: mints
 """
 from __future__ import unicode_literals
@@ -21,7 +21,7 @@ import numpy as np
 from os import path
 
 MAP = None
-EXTINCTION_FILENAME = 'extinction_data/lambda_sfd_ebv.fits'
+EXTINCTION_FILENAME = 'lambda_sfd_ebv.fits'
 
 
 def _download(url, filename):

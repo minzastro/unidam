@@ -106,12 +106,12 @@ if 'galactic' in config:
     data.rename_column(config['galactic']['longitude'], 'l')
     data.rename_column(config['galactic']['lattitude'], 'b')
 else:
-    data[args.ra].unit = u.degree
-    data[args.dec].unit = u.degree
+    data[ra].unit = u.degree
+    data[dec].unit = u.degree
     c = SkyCoord(ra=data[ra], dec=data[dec], frame='icrs')
     data['l'] = c.galactic.l.degree
     data['b'] = c.galactic.b.degree
-keep.extend(['l', 'b'])
+keep.extend(['l', 'b', ra, dec])
 
 print(keep)
 data.keep_columns(set(keep))
@@ -157,19 +157,27 @@ data.remove_columns(['angDist',
                     bad_col)
 # TODO: make this an option.
 print('XMatching with Gaia')
+print(data.colnames)
 data = XMatch.query(cat1=data,
                     cat2='vizier:I/345/gaia2',
                     max_distance=3 * u.arcsec,
-                    colRA1=args.ra, colDec1=args.dec,
+                    colRA1=ra, colDec1=dec,
+                    #colRA2='RA_ICRS', colDec2='DE_ICRS',
                     responseformat='votable',
                     selection='best')
-data.remove_columns(['ra_ep2000', 'dec_ep2000',
+print(data.colnames)
+data.remove_columns(['ra_epoch2000', 'dec_epoch2000',
                      'errHalfMaj', 'errHalfMin', 'errPosAng',
-                     'ra', 'dec', 'source_id', 'ref_epoch',
-                     'ra_error', 'dec_error',
+                     'ra', 'ra_error', 'dec', 'dec_error',
                      'pmra', 'pmra_error', 'pmdec', 'pmdec_error',
-                     'ra_dec_corr', 'duplicated_source',
-                     'phot_variable_flag'])
+                     'duplicated_source', 'phot_g_mean_flux',
+                     'phot_g_mean_flux_error', 'phot_g_mean_mag',
+                     'phot_bp_mean_flux', 'phot_bp_mean_flux_error',
+                     'phot_bp_mean_mag', 'phot_rp_mean_flux',
+                     'phot_rp_mean_flux_error', 'phot_rp_mean_mag',
+                     'bp_rp', 'radial_velocity', 'radial_velocity_error',
+                     'rv_nb_transits', 'teff_val', 'a_g_val',
+                     'e_bp_min_rp_val', 'radius_val', 'lum_val'])
 clean(data)
 data['parallax'] *= 1e-3
 data['parallax_error'] *= 1e-3

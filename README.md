@@ -6,8 +6,8 @@ described in https://arxiv.org/abs/1705.00963 and https://arxiv.org/abs/1804.065
 You can install UniDAM by running
 
 ```
-python3 setup build
-python3 setup install [--home]
+python3 setup.py build
+python3 setup.py install [--user]
 ```
 
 ### What you will need to run UniDAM (apart from UniDAM itself) is the following:
@@ -147,8 +147,8 @@ where `IDs` is a comma-separated list of IDs from the input file. In this case t
 | uspdf\_priority                                |         | Priority order of a given USPDF (starting from 0)                         |
 | uspdf\_weight                                  |         | Weight of a given USPDF $V_m$                                             |
 | total\_uspdfs                                  |         | Number of USPDF with $V_m > 0.03$                                         |
-| p\_best                                        |         | Probability for a best-fitting model (see Section \ref{sec:p_best_p_sed}) |
-| p\_sed                                         |         | p-value from $\chi^2$ SED fit (see Section \ref{sec:p_best_p_sed})      |
+| p\_best                                        |         | Probability for a best-fitting model  |
+| p\_sed                                         |         | p-value from $\chi^2$ SED fit     |
 | quality                                        |         | Quality flag (see below)                              |
 | distance_modulus_smooth | mag | smoothing used in distance modulus PDF calculations |
 | extinction_smooth | mag | smoothing used in extinction PDF calculations |

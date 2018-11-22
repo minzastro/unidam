@@ -142,7 +142,7 @@ else:
                     print('%s not in columns' % k)
             final.add_row(new_row)
         i += 1
-    if de.dump_pdf:
+    if de.config['dump_pdf']:
         output_prefix = '%s_stacked' % args.output[:-5]
         np.savetxt('%s_age_pdf.dat' % output_prefix,
                    np.vstack((AGE_RANGE, de.total_age_pdf)).T)

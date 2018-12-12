@@ -370,14 +370,15 @@ class UniDAMTool(object):
         Prepare magnitudes and spectral parameters
         for a given row.
         """
-        self.mag = np.zeros(len(self.mag_names))
-        self.mag_err = np.zeros(len(self.mag_names))
-        for iband, band in enumerate(self.mag_names):
+        self.mag_names = np.array(list(self.default_bands), dtype=str)
+        self.mag = np.zeros(len(self.default_bands))
+        self.mag_err = np.zeros_like(self.mag)
+        for iband, band in enumerate(self.default_bands):
             self.mag[iband] = row['%smag' % band]
             # Storing the inverse uncertainty squared
             # for computational efficiency.
             self.mag_err[iband] = 1. / (row['e_%smag' % band])**2
-        self.Rk = np.array([self.RK[band] for band in self.mag_names])
+        self.Rk = np.array([self.RK[band] for band in self.default_bands.keys()])
         self.abs_mag = np.array(list(self.default_bands.values()), dtype=int)
         # Filter out bad data:
         self._apply_mask(~(np.isnan(self.mag_err) + np.isnan(self.mag)))
@@ -714,7 +715,7 @@ class UniDAMTool(object):
         age_histogram = np.histogram(xdata[:, age_col],
                                      to_bins(constants.AGE_RANGE),
                                      weights=xdata[:, self.w_column],
-                                     normed=True)[0]
+                                     density=True)[0]
         age_histogram = age_histogram * mode_weight / age_histogram.sum()
         age_histogram[np.isnan(age_histogram)] = 0.
         self.total_age_pdf += age_histogram
@@ -839,7 +840,7 @@ class UniDAMTool(object):
                     new_result['sed_%s' % band] = \
                         sed['Observed'][band] - sed['Predicted'][band]
                     new_result['sed_%s_relative' % band] = \
-                        new_result['sed_%s' % band] * sed['ObsErr'][band]
+                        new_result['sed_%s' % band] / sed['ObsErr'][band]
         for ikey, key in enumerate(self.fitted_columns.keys()):
             extinction_if_needed = None
             if key == 'stage':

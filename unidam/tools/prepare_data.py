@@ -74,15 +74,22 @@ data = Table.read(args.input)
 config = ConfigObj(args.config)
 if 'keep' in config:
     keep = config['keep'].split(',')
+    if len(keep) == 1 and len(keep[0]) == 0:
+        keep = []
 else:
     keep = []
 
+print(keep)
 if args.ra is None:
-    ra = config['mapping']['ra']
+    if 'ra' not in config['mapping']:
+        raise ValueError('RA must be provided in mapping or as a command line parameter')
+    ra = 'ra'
 else:
     ra = args.ra
 if args.dec is None:
-    dec = config['mapping']['dec']
+    if 'dec' not in config['mapping']:
+        raise ValueError('DEC must be provided in mapping or as a command line parameter')
+    dec = 'dec'
 else:
     dec = args.dec
 
@@ -92,10 +99,14 @@ for key, value in list(config['mapping'].items()):
         coldata = np.ones(len(data)) * float(systematics)
         if len(colname) > 0:
             coldata = np.sqrt(coldata**2 + data[colname]**2)
+        if key in data.colnames:
+            data.remove_column(key)
         data.add_column(Column(name=key,
                                data=coldata))
     elif value in data.colnames:
         if value != key:
+            if key in data.colnames:
+                data.remove_column(key)
             data.rename_column(value, key)
     else:
         raise ValueError('%s not in table' % value)
@@ -111,8 +122,21 @@ else:
     c = SkyCoord(ra=data[ra], dec=data[dec], frame='icrs')
     data['l'] = c.galactic.l.degree
     data['b'] = c.galactic.b.degree
-keep.extend(['l', 'b', ra, dec])
+keep.extend(['l', 'b'])
 
+has_matches = config.get('prematched', default=[])
+need_matches = config.get('needmatch', default=['2MASS', 'AllWISE', 'Gaia'])
+if '2MASS' in has_matches:
+    keep.extend(['Jmag', 'e_Jmag', 'Hmag', 'e_Hmag',
+                 'Kmag', 'e_Kmag', 'Qfl'])
+if 'AllWISE' in has_matches:
+    keep.extend(['W1mag', 'e_W1mag', 'W2mag', 'e_W2mag',
+                 'ccf', 'qph'])
+if 'Gaia' in has_matches:
+    keep.extend(['parallax', 'parallax_error'])
+    if np.nanmax(data['parallax_error']) > 1e-2:
+        data['parallax'] *= 1e-3
+        data['parallax_error'] *= 1e-3
 print(keep)
 data.keep_columns(set(keep))
 
@@ -121,66 +145,71 @@ def clean(table):
         if column in table.colnames:
             table.remove_column(column)
 
-print('Adding extinction data')
-data.add_column(Column(name='pix',
-                       data=hp.ang2pix(512,
-                                       data['l'], data['b'], lonlat=True)))
-extinction_data = Table.read('/home/mints/data/extinction/lambda_sfd_ebv_Ak.fits')
+if 'extinction' not in config['mapping'] or \
+    'extinction_error' not in config['mapping']:
+    print('Adding extinction data')
+    data.add_column(Column(name='pix',
+                           data=hp.ang2pix(512,
+                                           data['l'], data['b'], lonlat=True)))
+    extinction_data = Table.read('/home/mints/data/extinction/lambda_sfd_ebv_Ak.fits')
 
-data = astropy_join(data, extinction_data, keys=('pix'), join_type='left')
+    data = astropy_join(data, extinction_data, keys=('pix'), join_type='left')
 
-print('XMatching with 2MASS')
-data = XMatch.query(cat1=data,
-                    cat2='vizier:II/246/out',
-                    max_distance=3 * u.arcsec,
-                    colRA1=ra, colDec1=dec,
-                    responseformat='votable',
-                    selection='best')
-data.remove_columns(['angDist',
-                     'errHalfMaj', 'errHalfMin', 'errPosAng',
-                     'X', 'MeasureJD'])
-clean(data)
-print('XMatching with AllWISE')
-data = XMatch.query(cat1=data,
-                    cat2='vizier:II/328/allwise',
-                    max_distance=3 * u.arcsec,
-                    colRA1=ra, colDec1=dec,
-                    responseformat='votable',
-                    selection='best')
-bad_col = ['%smag_2' % b for b in 'JHK'] + ['e_%smag_2' % b for b in 'JHK']
-clean(data)
-data.remove_columns(['angDist',
-                     'eeMaj', 'eeMin', 'eePA',
-                     'W3mag', 'W4mag',
-                     'e_W3mag', 'e_W4mag',
-                     'pmRA', 'e_pmRA', 'pmDE', 'e_pmDE', 'ID', 'd2M'] +
-                    bad_col)
+if '2MASS' not in has_matches:
+    print('XMatching with 2MASS')
+    data = XMatch.query(cat1=data,
+                        cat2='vizier:II/246/out',
+                        max_distance=3 * u.arcsec,
+                        colRA1=ra, colDec1=dec,
+                        responseformat='votable',
+                        selection='best')
+    data.remove_columns(['angDist',
+                         'errHalfMaj', 'errHalfMin', 'errPosAng',
+                         'X', 'MeasureJD'])
+    clean(data)
+if 'AllWISE' not in has_matches:
+    print('XMatching with AllWISE')
+    data = XMatch.query(cat1=data,
+                        cat2='vizier:II/328/allwise',
+                        max_distance=3 * u.arcsec,
+                        colRA1=ra, colDec1=dec,
+                        responseformat='votable',
+                        selection='best')
+    bad_col = ['%smag_2' % b for b in 'JHK'] + ['e_%smag_2' % b for b in 'JHK']
+    clean(data)
+    data.remove_columns(['angDist',
+                         'eeMaj', 'eeMin', 'eePA',
+                         'W3mag', 'W4mag',
+                         'e_W3mag', 'e_W4mag',
+                         'pmRA', 'e_pmRA', 'pmDE', 'e_pmDE', 'ID', 'd2M'] +
+                        bad_col)
 # TODO: make this an option.
-print('XMatching with Gaia')
-print(data.colnames)
-data = XMatch.query(cat1=data,
-                    cat2='vizier:I/345/gaia2',
-                    max_distance=3 * u.arcsec,
-                    colRA1=ra, colDec1=dec,
-                    #colRA2='RA_ICRS', colDec2='DE_ICRS',
-                    responseformat='votable',
-                    selection='best')
-print(data.colnames)
-data.remove_columns(['ra_epoch2000', 'dec_epoch2000',
-                     'errHalfMaj', 'errHalfMin', 'errPosAng',
-                     'ra', 'ra_error', 'dec', 'dec_error',
-                     'pmra', 'pmra_error', 'pmdec', 'pmdec_error',
-                     'duplicated_source', 'phot_g_mean_flux',
-                     'phot_g_mean_flux_error', 'phot_g_mean_mag',
-                     'phot_bp_mean_flux', 'phot_bp_mean_flux_error',
-                     'phot_bp_mean_mag', 'phot_rp_mean_flux',
-                     'phot_rp_mean_flux_error', 'phot_rp_mean_mag',
-                     'bp_rp', 'radial_velocity', 'radial_velocity_error',
-                     'rv_nb_transits', 'teff_val', 'a_g_val',
-                     'e_bp_min_rp_val', 'radius_val', 'lum_val'])
-clean(data)
-data['parallax'] *= 1e-3
-data['parallax_error'] *= 1e-3
+if 'Gaia' not in has_matches:
+    print('XMatching with Gaia')
+    print(data.colnames)
+    data = XMatch.query(cat1=data,
+                        cat2='vizier:I/345/gaia2',
+                        max_distance=3 * u.arcsec,
+                        colRA1=ra, colDec1=dec,
+                        #colRA2='RA_ICRS', colDec2='DE_ICRS',
+                        responseformat='votable',
+                        selection='best')
+    print(data.colnames)
+    data.remove_columns(['ra_epoch2000', 'dec_epoch2000',
+                         'errHalfMaj', 'errHalfMin', 'errPosAng',
+                         'ra', 'ra_error', 'dec', 'dec_error',
+                         'pmra', 'pmra_error', 'pmdec', 'pmdec_error',
+                         'duplicated_source', 'phot_g_mean_flux',
+                         'phot_g_mean_flux_error', 'phot_g_mean_mag',
+                         'phot_bp_mean_flux', 'phot_bp_mean_flux_error',
+                         'phot_bp_mean_mag', 'phot_rp_mean_flux',
+                         'phot_rp_mean_flux_error', 'phot_rp_mean_mag',
+                         'bp_rp', 'radial_velocity', 'radial_velocity_error',
+                         'rv_nb_transits', 'teff_val', 'a_g_val',
+                         'e_bp_min_rp_val', 'radius_val', 'lum_val'])
+    clean(data)
+    data['parallax'] *= 1e-3
+    data['parallax_error'] *= 1e-3
 if args.force and os.path.exists(args.output):
     os.remove(args.output)
 data.write(args.output)

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Fri May 20 13:09:00 2016
@@ -23,6 +23,7 @@ from astropy.table import Table, Column
 from unidam.iso.model_fitter import model_fitter as mf
 from unidam.iso.unidam_main import UniDAMTool
 from unidam.utils.constants import AGE_RANGE
+from unidam.utils.timer import Timer
 
 np.set_printoptions(linewidth=200)
 parser = argparse.ArgumentParser(description="""
@@ -38,6 +39,9 @@ parser.add_argument('-c', '--config', type=str,
                     help='Config file name')
 parser.add_argument('--id', type=str, default=None,
                     help='Run for just a single ID or a comma-separated list of IDs')
+parser.add_argument('-t', '--time', action="store_true",
+                    default=False,
+                    help='Add timing output (only in parallel mode)')
 group = parser.add_mutually_exclusive_group()
 group.add_argument('-d', '--dump-results', action="store_true",
                     default=False,
@@ -57,7 +61,9 @@ final = de.get_table(data, idtype)
 unfitted = Table()
 unfitted['id'] = Column(dtype=idtype)
 unfitted['error'] = Column(dtype='S100')
-
+if args.time:
+    final['exec_time'] = Column(dtype=float)
+    final['pid'] = Column(dtype=int)
 mf.use_model_weight = True
 
 if args.id is not None:
@@ -86,7 +92,8 @@ if args.parallel:
         bad = deepcopy(unfitted)
         for xrow in patch:
             try:
-                result = des.get_estimates(xrow, dump=False)
+                with Timer() as exec_time:
+                    result = des.get_estimates(xrow, dump=False)
             except:
                 # Put all exception text into an exception and raise that
                 raise Exception(str(xrow['id']) + "\n" + "".join(traceback.format_exception(*sys.exc_info())))
@@ -97,6 +104,9 @@ if args.parallel:
                 bad.add_row(result)
                 continue
             for new_row in result:
+                if args.time:
+                    new_row['exec_time'] = exec_time.interval
+                    new_row['pid'] = os.getpid()
                 tbl.add_row(new_row)
         return tbl, des, bad
 
@@ -105,7 +115,7 @@ if args.parallel:
     pool_result, des, bads = list(zip(*pool_result))
     final = vstack(pool_result)
     unfitted = vstack(bads)
-    if de.dump_pdf:
+    if de.config['dump_pdf']:
         out_age_pdf = np.zeros_like(des[0].total_age_pdf)
         out_2d_pdf = np.zeros_like(des[0].total_2d_pdf)
         for de_ in des:
@@ -131,7 +141,8 @@ else:
         print(xrow[de.id_column])
         #with warnings.catch_warnings():
         #    warnings.filterwarnings("error")
-        result = de.get_estimates(xrow, dump=args.dump_results)
+        with Timer() as exec_time:
+            result = de.get_estimates(xrow, dump=args.dump_results)
         if result is None:
             continue
         elif isinstance(result, dict):
@@ -141,9 +152,12 @@ else:
             for k in list(new_row.keys()):
                 if k not in final.colnames:
                     print('%s not in columns' % k)
+            if args.time:
+                new_row['exec_time'] = exec_time.interval
+                new_row['pid'] = os.getpid()
             final.add_row(new_row)
         i += 1
-    if de.dump_pdf:
+    if de.config['dump_pdf']:
         output_prefix = '%s_stacked' % args.output[:-5]
         np.savetxt('%s_age_pdf.dat' % output_prefix,
                    np.vstack((AGE_RANGE, de.total_age_pdf)).T)

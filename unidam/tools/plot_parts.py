@@ -59,10 +59,11 @@ def plot_pdf(xid, fits, name, data, column, ax, each=False,
             lw = 2.5
         else:
             lw = 1
-        l = ax.step(binx, n, label='Stage %s' % label[stage], where='mid',
-                    linewidth=lw, color=lcolors[stage])
-        lines.append(l[0])
-        labels.append('Stage %s' % label[stage])
+        if total < 2:
+            l = ax.step(binx, n, label='Stage %s' % label[stage], where='mid',
+                        linewidth=lw, color=lcolors[stage])
+            lines.append(l[0])
+            labels.append('Stage %s' % label[stage])
         ns.append(n)
     fit_norm = np.sum(ns)
     if plot_debug:
@@ -100,12 +101,17 @@ def plot_pdf(xid, fits, name, data, column, ax, each=False,
                 ax.plot(binx, ydata2, color=lcolors[row['stage']],
                         linestyle='--', linewidth=1.5,
                         label='Fit %s' % label[row['stage']])
-    if total:
+    if total > 0:
+        if total == 1:
+            linestyle = '--'
+        else:
+            linestyle = '-'
         line = plt.step(binx, n_total, label='Total', where='mid',
-                        color='black', linestyle='--')
+                        color='black', linestyle=linestyle)
         lines.append(line[0])
         if plot_fits:
-            line = plt.plot(binx, ydata_total, color='black', linestyle='--')
+            line = plt.plot(binx, ydata_total, color='black',
+                            linestyle=linestyle)
             lines.append(line[0])
             labels.append('Total')
         ns.append(n_total)
@@ -172,9 +178,11 @@ if __name__ == '__main__':
     parser.add_argument('-g', '--grid', action="store_true",
                         default=False,
                         help='Place all plots into one file')
-    parser.add_argument('-t', '--total', action="store_true",
-                        default=False,
-                        help='Add total histogram and fit to plots')
+    parser.add_argument('-t', '--total', type=int, default=0,
+                        help="""Total histogram and fit mode:
+                            0 - no totals,
+                            1 - add (with black dashed line),
+                            2 - plot only totals""")
     parser.add_argument('-l', '--legend', action="store_true",
                         default=False,
                         help='Add a legend on each plot')

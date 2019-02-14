@@ -66,11 +66,15 @@ def get_splitted(config, name):
 
 
 def get_modified_chi2(offset, dof, sum_of_squares):
-    r = [truncnorm.rvs(a=offset, b=np.inf, size=10000)]
+    """
+    Chi-squared analog for truncated multivariate
+    Gaussian.
+    """
+    random = [truncnorm.rvs(a=offset, b=np.inf, size=10000)]
     for _ in range(dof - 1):
-        r.append(norm.rvs(size=10000))
-    rr = np.sum(np.array(r)**2, axis=0)
-    return (np.sum(rr < sum_of_squares) * 1e-4)
+        random.append(norm.rvs(size=10000))
+    chi2_values = np.sum(np.array(random)**2, axis=0)
+    return (np.sum(chi2_values < sum_of_squares) * 1e-4)
 
 
 class UniDAMTool(object):
@@ -86,7 +90,8 @@ class UniDAMTool(object):
         'parallax_known': '0',
         'allow_negative_extinction': '0',
         'dump_pdf': False,
-        'dump_prefix': 'dump'
+        'dump_prefix': 'dump',
+        'save_sed': False
         }
 
     MIN_USPDF_WEIGHT = 0.03
@@ -101,6 +106,11 @@ class UniDAMTool(object):
                     'extinction': 0.001,
                     'parallax': 0.00}
 
+    RK = {band: constants.R_FACTORS[band] / constants.R_FACTORS['K']
+          for band in constants.R_FACTORS}
+    RV = {band: constants.R_FACTORS[band] / constants.R_FACTORS['V']
+          for band in constants.R_FACTORS}
+
     def __init__(self, config_filename=None):
         self.mag = None
         self.mag_matrix = None
@@ -109,13 +119,11 @@ class UniDAMTool(object):
         self.abs_mag = None
         self.Rk = None
         self.param = None
-        self.dump = False
         self.param_err = None
         self.id_column = None
-        self.dump_pdf = False
-        self.dump_pdf_file = None
         self.model_column_names = None
         self.config = {}
+        self.config['dump'] = False
         config = ConfigParser()
         config.optionxform = str
         if config_filename is None:
@@ -164,17 +172,13 @@ class UniDAMTool(object):
             'general', 'allow_negative_extinction')
         for icolumn, column in enumerate(self.SPECIAL):
             mf.special_columns[icolumn] = column in self.fitted_columns
-        self.dump_pdf = config.getboolean('general', 'dump_pdf')
-        self.dump_prefix = config.get('general', 'dump_prefix')
-        if self.dump_pdf:
+        self.config['dump_pdf'] = config.getboolean('general', 'dump_pdf')
+        self.config['dump_prefix'] = config.get('general', 'dump_prefix')
+        self.config['save_sed'] = config.getboolean('general', 'save_sed')
+        if self.config['dump_pdf']:
             self.total_age_pdf = np.zeros(constants.AGE_RANGE.shape[0])
             self.total_2d_pdf = np.zeros((constants.DM_RANGE.shape[0],
                                           constants.AGE_RANGE.shape[0]))
-
-        self.RK = {band: constants.R_FACTORS[band] / constants.R_FACTORS['K']
-                   for band in constants.R_FACTORS}
-        self.RV = {band: constants.R_FACTORS[band] / constants.R_FACTORS['V']
-                   for band in constants.R_FACTORS}
         model_file = config.get('general', 'model_file')
         if not (os.path.isabs(model_file) or
                 model_file.startswith('./')):
@@ -232,6 +236,7 @@ class UniDAMTool(object):
         self.fitted_columns = self._names_to_indices(self.fitted_columns)
         self.model_columns = self._names_to_indices(self.model_columns)
         self.default_bands = self._names_to_indices(self.default_bands)
+        self.mag_names = np.array(list(self.default_bands.keys()), dtype=str)
         print('Pass to F90')
         mf.alloc_models(self.model_data)
         print('Ready')
@@ -301,7 +306,7 @@ class UniDAMTool(object):
         """
         # Set maximum differnce between model and observation in units
         # of the observational error.
-        self.dump = dump
+        self.config['dump'] = dump
         self.prepare_row(row)
         validate = self._validate_row(row[self.id_column])
         if validate is not None:
@@ -360,7 +365,7 @@ class UniDAMTool(object):
         # Sort by priority
         result.sort(key=lambda x: x['uspdf_priority'])
         result = self.assign_quality(result)
-        if self.dump:
+        if self.config['dump']:
             # Store results into a json-file.
             self.dump_results(model_params, row, result)
             # Delete *debug* keys in the results
@@ -379,15 +384,15 @@ class UniDAMTool(object):
         Prepare magnitudes and spectral parameters
         for a given row.
         """
-        self.mag_names = np.array(list(self.default_bands.keys()), dtype=str)
-        self.mag = np.zeros(len(self.mag_names))
-        self.mag_err = np.zeros(len(self.mag_names))
-        for iband, band in enumerate(self.mag_names):
+        self.mag_names = np.array(list(self.default_bands), dtype=str)
+        self.mag = np.zeros(len(self.default_bands))
+        self.mag_err = np.zeros_like(self.mag)
+        for iband, band in enumerate(self.default_bands):
             self.mag[iband] = row['%smag' % band]
             # Storing the inverse uncertainty squared
             # for computational efficiency.
             self.mag_err[iband] = 1. / (row['e_%smag' % band])**2
-        self.Rk = np.array([self.RK[band] for band in self.mag_names])
+        self.Rk = np.array([self.RK[band] for band in self.default_bands.keys()])
         self.abs_mag = np.array(list(self.default_bands.values()), dtype=int)
         # Filter out bad data:
         self._apply_mask(~(np.isnan(self.mag_err) + np.isnan(self.mag)))
@@ -493,15 +498,15 @@ class UniDAMTool(object):
         else:
             if name == 'extinction':
                 m_min = mode_data[mode_data > 0].min() / 2.
-            h, _ = bin_estimate(mode_data, weights)
+            bin_size, _ = bin_estimate(mode_data, weights)
             if name in self.MINIMUM_STEP:
-                h = max(h, self.MINIMUM_STEP[name])
-            if h < np.finfo(np.float32).eps:
+                bin_size = max(bin_size, self.MINIMUM_STEP[name])
+            if bin_size < np.finfo(np.float32).eps:
                 # In some (very ugly) cases h cannot be properly
                 # determined...
                 bin_count = 3
             else:
-                bin_count = int((m_max - m_min) / h) + 1
+                bin_count = int((m_max - m_min) / bin_size) + 1
             bins = np.linspace(m_min, m_max, bin_count)
         return bins
 
@@ -638,10 +643,9 @@ class UniDAMTool(object):
                   '_fit': fit,
                  }
         if name == 'extinction':
-            # Todo: fix!
             result['_zero'] = 1. - mode_data[mode_data > 0.].shape[0] \
                 / float(mode_data.shape[0])
-        if self.dump and bin_centers is not None:
+        if self.config['dump'] and bin_centers is not None:
             result.update({'_bins_debug': bin_centers,
                            '_hist_debug': hist})
         result_par = np.array(list(par) + [0] * 5)[:5]
@@ -765,6 +769,12 @@ class UniDAMTool(object):
         return sed_dict
 
     def get_psed_pbest(self, xdata, dof):
+        """
+        Calculate values related to best-fitting model
+        (best fitting = model with highest weight).
+        Note that the best-fitting model is not neccesserily the one
+        with the lowest log-likelihood.
+        """
         best_model = np.argmin(xdata[:, self.w_column - 1] +
                                xdata[:, self.w_column - 2])
         l_sed = xdata[best_model, self.w_column - 1]
@@ -834,8 +844,17 @@ class UniDAMTool(object):
                       'uspdf_weight': np.sum(xdata[:, self.w_column]) / wtotal,
                      }
         new_result.update(self.get_psed_pbest(xdata, dof))
-        if self.dump and self.mag.size > 0:
-            new_result['sed_debug'] = self.dump_sed(xdata)
+        if (self.config['dump'] or self.config['save_sed']) and \
+            self.mag.size > 0:
+            sed = self.dump_sed(xdata)
+            if self.config['dump']:
+                new_result['sed_debug'] = sed
+            if self.config['save_sed']:
+                for band in self.mag_names:
+                    new_result['sed_%s' % band] = \
+                        sed['Observed'][band] - sed['Predicted'][band]
+                    new_result['sed_%s_relative' % band] = \
+                        new_result['sed_%s' % band] / sed['ObsErr'][band]
         for ikey, key in enumerate(self.fitted_columns.keys()):
             extinction_if_needed = None
             if key == 'stage':
@@ -859,7 +878,7 @@ class UniDAMTool(object):
                                                 xdata[:, self.w_column],
                                                 smooth,
                                                 extinction_if_needed))
-        if self.dump_pdf and 'age' in self.fitted_columns:
+        if self.config['dump_pdf'] and 'age' in self.fitted_columns:
             self.add_to_pdf(xdata, new_result['uspdf_weight'])
         if len(xdata) > 3 and 'distance_modulus' in self.fitted_columns:
             if 'age' in self.fitted_columns:
@@ -922,12 +941,13 @@ class UniDAMTool(object):
         idstr = str(row[self.id_column]).strip()
         dump_array = list(range(self.w_column + 1))
         header = '%s L_iso L_sed p_w' % ' '.join(list(self.fitted_columns.keys()))
-        ensure_dir(self.dump_prefix)
-        np.savetxt('%s/dump_%s.dat' % (self.dump_prefix, idstr),
+        ensure_dir(self.config['dump_prefix'])
+        np.savetxt('%s/dump_%s.dat' % (self.config['dump_prefix'], idstr),
                    model_params[:, dump_array],
                    header=header)
         json.dump(result,
-                  open('%s/dump_%s.json' % (self.dump_prefix, idstr), 'w'),
+                  open('%s/dump_%s.json' % (self.config['dump_prefix'],
+                                            idstr), 'w'),
                   indent=2, cls=NumpyAwareJSONEncoder)
 
     def get_table(self, data, idtype=str):
@@ -991,6 +1011,10 @@ class UniDAMTool(object):
         if 'extinction' in self.fitted_columns:
             final['extinction_smooth'] = float_column(unit='mag')
             final['extinction_zero'] = float_column(unit='fraction')
+        if self.config['save_sed']:
+            for band in self.mag_names:
+                final['sed_%s' % band] = float_column(unit='mag')
+                final['sed_%s_relative' % band] = float_column(unit='fraction')
         for keep in self.keep_columns:
             final[keep] = Column(dtype=data[keep].dtype)
         return final

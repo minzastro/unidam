@@ -210,20 +210,31 @@ class UniDAMTool(object):
         """
         if not os.path.exists(filename):
             raise Exception('Model file %s is not found' % filename)
+        print('Opening FITS')
         table = fits.open(filename)
         self.model_data = None
         if os.path.exists(filename + '.npy'):
             if os.path.getmtime(filename + '.npy') > os.path.getmtime(filename):
+                print('Opening npy')
                 self.model_data = np.load(filename + '.npy')
         if self.model_data is None:
-            self.model_data = np.asarray(table[1].data.tolist(), dtype=float)
+            print('Converting data to nparray')
+            v = table[1].data
+            self.model_data = np.empty((v.shape[0], len(v[0])))
+            for i in range(len(v[0])):
+                name = v.columns[i].name
+                self.model_data[:, i] = v[name]
+            #self.model_data = np.asarray(table[1].data.tolist(), dtype=float)
+            print('Saving...')
             np.save(filename + '.npy', self.model_data)
         self.age_grid = np.asarray(table[2].data, dtype=float)
         self.model_column_names = [column.name for column in table[1].columns]
         self.fitted_columns = self._names_to_indices(self.fitted_columns)
         self.model_columns = self._names_to_indices(self.model_columns)
         self.default_bands = self._names_to_indices(self.default_bands)
+        print('Pass to F90')
         mf.alloc_models(self.model_data)
+        print('Ready')
 
     def _apply_mask(self, mask):
         """
@@ -714,7 +725,7 @@ class UniDAMTool(object):
         age_histogram = np.histogram(xdata[:, age_col],
                                      to_bins(constants.AGE_RANGE),
                                      weights=xdata[:, self.w_column],
-                                     normed=True)[0]
+                                     density=True)[0]
         age_histogram = age_histogram * mode_weight / age_histogram.sum()
         age_histogram[np.isnan(age_histogram)] = 0.
         self.total_age_pdf += age_histogram
@@ -723,7 +734,7 @@ class UniDAMTool(object):
             two_histogram = np.histogram2d(
                 xdata[:, dm_col], xdata[:, age_col],
                 (to_bins(constants.DM_RANGE), to_bins(constants.AGE_RANGE)),
-                weights=xdata[:, self.w_column], normed=True)[0]
+                weights=xdata[:, self.w_column], density=True)[0]
             two_histogram = two_histogram * mode_weight / two_histogram.sum()
             two_histogram[np.isnan(two_histogram)] = 0.
             self.total_2d_pdf += two_histogram

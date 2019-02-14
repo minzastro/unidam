@@ -122,8 +122,9 @@ else:
         # if a debug-mode is switched on for a complete survey.
         mf.debug = args.dump_results
     else:
-        print("Warning, dumping of results is allowed only if ID list"
-              " is provided. Disabling result dumps")
+        if args.dump_results:
+            print("Warning, dumping of results is allowed only if ID list"
+                  " is provided. Disabling result dumps")
         mf.debug = False
     i = 0
     for xrow in data:

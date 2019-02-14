@@ -345,14 +345,18 @@ subroutine find_best(m_count)
           cycle
         endif
         if (use_model_weight) then
-           ! Multiply by model weight (combined of age and mass weighting)
-           p = p * models(i, model_column_count)
+          ! Multiply by model weight (combined of age and mass weighting)
+          p = p * models(i, model_column_count)
         endif
-        if (distance_prior.eq.1) then
-           ! Multiply by d^2 - volume factor correction
-           p = p * distance * distance
-        else if (distance_prior.eq.2) then
-           p = p * (distance * distance * exp(-distance / prior_parameter))
+        if (use_photometry) then
+          ! Prevent the use of distance prior when no photometry
+          ! is used and therefore no distance is estimated.
+          if (distance_prior.eq.1) then
+            ! Multiply by d^2 - volume factor correction
+            p = p * distance * distance
+          else if (distance_prior.eq.2) then
+            p = p * (distance * distance * exp(-distance / prior_parameter))
+          endif
         endif
         model_params(m_count, prob+2) = p
         model_params(m_count, prob+3) = i

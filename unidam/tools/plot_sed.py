@@ -30,9 +30,10 @@ parser.add_argument('-d', '--dump', type=str, default='dump',
                     help='Dump folder name')
 parser.add_argument('--dev', action="store_true",
                     default=False,
-                    help='Use development file path')
+                    help='Use development file path (../iso/)')
 
-parser.add_argument('rest', nargs=argparse.REMAINDER)
+parser.add_argument('rest', nargs=argparse.REMAINDER,
+                    help='Comma-separated list of IDs')
 args = parser.parse_args()
 
 BAND_POS = {'U': 3508.2,
@@ -47,7 +48,8 @@ BAND_POS = {'U': 3508.2,
             'G_BP': 5309.57,
             'G_RP': 7709.85,
             'W1': 33159.26,
-            'W2': 45611.97
+            'W2': 45611.97,
+            'UKIDSSJ': 13000.00
             # TODO: SDSS
             }
 

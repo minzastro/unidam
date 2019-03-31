@@ -9,6 +9,16 @@ from unidam.studentst_boosted import studentst_boosted as studentst
 from unidam.utils.trunc_revexpon import trunc_revexpon
 from unidam.utils.trunc_line import TruncLine
 
+"""
+A collection of tools to convert UniDAM output parameters to
+PDF(x).
+
+Usage (example):
+row -- row of UniDAM output file.
+x = AGE_RANGE
+y = get_ydata('age', row, x)
+"""
+
 
 def get_param(fit, par):
     """

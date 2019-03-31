@@ -49,10 +49,6 @@ def min_count_bins(data, min_step, min_count, minimum=None, maximum=None):
     return result
 
 
-def norm(a, b):
-    return b.sum() / a.sum()
-
-
 def get_chi2(a, b):
     """
     Chi-squared probability for the difference between two arrays.

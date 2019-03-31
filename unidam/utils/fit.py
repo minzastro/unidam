@@ -20,28 +20,39 @@ try:
         result = np.array([skewn.pdf(xx) for xx in x])
         return result
 except ImportError:
+    # No skewnorm_boost library available.
+    # A local python-based version will be used,
+    # which is considerably slower.
     from unidam.utils.skewnorm_local import skewnorm_local as sn
-    
+
     def skew_gauss(x, mu, sigma, alpha):
         """
         Skewed Gaussian distribution.
         """
-        result = np.array([sn.pdf(xx) for xx in x])
+        result = np.array([sn.pdf(xx, loc=mu, scale=sigma, shape=alpha
+                                  ) for xx in x])
         return result
 
 try:
     import studentst_boost
 
-    def t_student(x, mu, sigma, df):
+    def t_student(x, mu, sigma, degrees_of_freedom):
+        """
+        Wrapper for Student's T-distribution,
+        re-normalized and modified to allow negative parameters.
+        """
         student = studentst_boost.StudentsT(mu, np.abs(sigma),
-                                            np.abs(df))
+                                            np.abs(degrees_of_freedom))
         result = np.array([student.pdf(xx) for xx in x])
         return result / (result.sum() * (x[1] - x[0]))
 except ImportError:
+    # No studentst_boost library available.
+    # A local python-based version will be used,
+    # which is considerably slower.
     from scipy.stats import t
 
-    def t_student(x, mu, sigma, df):
-        result = t.pdf(x, np.abs(df), mu, np.abs(sigma))
+    def t_student(x, mu, sigma, degrees_of_freedom):
+        result = t.pdf(x, np.abs(degrees_of_freedom), mu, np.abs(sigma))
         return result / (result.sum() * (x[1] - x[0]))
 
 
@@ -68,6 +79,8 @@ def do_fit_linear(xin, yin):
     residuals = np.sum((yin - np.polyval(first, xin))**2)
     mode = yin.max()
     while lower < upper - 2 and yin[lower] < mode * 1e-2:
+        # Increase lower bound gradually,
+        # re-fitting at each step, while residuals decrease.
         lower += 1
         test = np.polyfit(xin[lower:upper], yin[lower:upper], 1)
         test_r = np.sum((yin[lower:upper] -
@@ -80,6 +93,8 @@ def do_fit_linear(xin, yin):
             first = test
             residuals = test_r
     while lower < upper - 2 and yin[upper - 1] < mode * 1e-2:
+        # Decrease upper bound gradually,
+        # re-fitting at each step, while residuals decrease.
         upper -= 1
         test = np.polyfit(xin[lower:upper], yin[lower:upper], 1)
         test_r = np.sum((yin[lower:upper] -
@@ -98,6 +113,8 @@ def do_fit_linear(xin, yin):
 def truncate_gauss(x, mu, sigma, a, b):
     """
     Truncated Gaussian distribution.
+    Modification to allow for negative sigma
+    and a, b parameters on x scale.
     """
     sigma = np.abs(sigma)
     alpha = (a-mu)/sigma
@@ -111,6 +128,7 @@ def truncate_gauss(x, mu, sigma, a, b):
 
 
 def exponent(x, mu, sigma):
+    """Re-normalized exponent distribution."""
     result = np.exp(-np.abs(x - mu) / sigma)
     return result / ((x[1] - x[0])*result.sum())
 
@@ -218,6 +236,9 @@ def do_fit_trunc(xdata, ydata, func, p0, minmax):
 
 
 def do_fit_student(xdata, ydata, p0):
+    """
+    Fit Student's T-function.
+    """
     try:
         popt, _ = curve_fit(t_student, xdata, ydata, p0, ftol=1e-5)
         return [popt, kl_divergence(xdata, t_student, popt, ydata)]
@@ -238,8 +259,25 @@ def estimate_skew(mu0, sigma0, mode0):
     delta = np.sqrt(np.pi * 0.5 * gamma / (gamma + ESTIMATE_CONST))
     if delta < 1.:
         return np.sign(s_est) * delta / np.sqrt(1. - delta * delta)
-    else:
-        return np.sign(s_est)
+    return np.sign(s_est)
+
+
+def pad_x_and_y(x, y, count):
+    """
+    Pad input data with zeros to the left and to the right.
+    """
+    xstep_left = x[1] - x[0]
+    xstep_right = x[-1] - x[-2]
+    xxdata = np.concatenate((
+        np.arange(x[0] - xstep_left * count,
+                  x[0] - xstep_left * 0.5, xstep_left),
+        x,
+        np.arange(x[-1] + xstep_right,
+                  x[-1] + xstep_right * (0.5 + count), xstep_right)
+        ))
+    yydata = np.zeros_like(xxdata)
+    yydata[10:-10] = y
+    return xxdata, yydata
 
 
 def find_best_fit(xdata, ydata, mu0, sigma0, return_all=False):
@@ -256,17 +294,7 @@ def find_best_fit(xdata, ydata, mu0, sigma0, return_all=False):
         Proxy for truncated Gaussian.
         """
         return truncate_gauss(x, p[0], p[1], lower, upper)
-    xstep_left = xdata[1] - xdata[0]
-    xstep_right = xdata[-1] - xdata[-2]
-    xxdata = np.concatenate((
-        np.arange(xdata[0] - xstep_left * 10,
-                  xdata[0] - xstep_left * 0.5, xstep_left),
-        xdata,
-        np.arange(xdata[-1] + xstep_right,
-                  xdata[-1] + xstep_right * 10.5, xstep_right)
-        ))
-    yydata = np.zeros_like(xxdata)
-    yydata[10:-10] = ydata
+    xxdata, yydata = pad_x_and_y(xdata, ydata, 10)
     # Empirical first estimate for the Student's parameter:
     nu0 = np.min([np.power(sigma0, -0.7), 1])
     y_good = np.where(ydata > 0)[0]
@@ -285,6 +313,7 @@ def find_best_fit(xdata, ydata, mu0, sigma0, return_all=False):
             # Exclude extremly bad shapes.
             # They are to be replaced by truncated gaussians.
             fits['P'][1] = 1e11
+        # For truncated Gaussian we use padded data.
         fits['T'] = do_fit_trunc(xxdata, yydata, tgauss, (mu0, sigma0),
                                  (lower, upper))
         if (fits['L'][0][0] < upper and
@@ -314,5 +343,4 @@ def find_best_fit(xdata, ydata, mu0, sigma0, return_all=False):
             fits[key][0] = np.insert(fits[key][0], 3, [lower, upper])
     if return_all:
         return fits
-    else:
-        return best, fits[best][0], fits[best][1]
+    return best, fits[best][0], fits[best][1]

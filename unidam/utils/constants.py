@@ -28,5 +28,7 @@ R_FACTORS = {'J': 0.72, 'H': 0.46, 'K': 0.306, # 2MASS
              'DECAMu': 4.495, 'DECAMg': 3.636, 'DECAMr': 2.585, 'DECAMi': 1.975, 'DECAMz': 1.457, 'DECAMY': 1.286,
              'VISTAZ': 1.578, 'VISTAY': 1.209, 'VISTAJ': 0.893, 'VISTAH': 0.564, 'VISTAKs': 0.372 }
 
+# Range of log(ages).
 AGE_RANGE = arange(6.13, 11.13, 0.02)
+# Range of distance modulus values, used only for 2D PDFs
 DM_RANGE = arange(0., 20., 0.25)

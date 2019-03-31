@@ -231,6 +231,10 @@ class UniDAMTool(object):
             #self.model_data = np.asarray(table[1].data.tolist(), dtype=float)
             print('Saving...')
             np.save(filename + '.npy', self.model_data)
+        self.model_data = np.hstack(
+            (self.model_data[:, :-1],
+             np.arange(len(self.model_data))[:, np.newaxis],
+             self.model_data[:, -1][:, np.newaxis]))
         self.age_grid = np.asarray(table[2].data, dtype=float)
         self.model_column_names = [column.name for column in table[1].columns]
         self.fitted_columns = self._names_to_indices(self.fitted_columns)
@@ -300,6 +304,32 @@ class UniDAMTool(object):
             mf.extinction = row[self.config['extinction']]
             mf.extinction_error = row[self.config['extinction_err']]
 
+    def get_fitting_models(self, row):
+        mask = np.ones(len(self.model_data), dtype=bool)
+        for param, param_err, model in zip(self.param, self.param_err,
+                                           self.model_columns.values()):
+            mask *= np.abs(self.model_data[:, model] - param) \
+                    <= (mf.max_param_err*param_err)
+        if mask.sum() == 0:
+            print(('No model fitting for %s' % row[self.id_column]))
+            return None
+        xsize = len(self.fitted_columns) + 4
+        model_params = np.zeros((mask.sum(), xsize))
+        for i, model in enumerate(self.model_data[mask]):
+            success, model_params[i] = mf.process_model(model, xsize)
+            if not success:
+                model_params[i, -2] = 0.
+            else:
+                model_params[i, -1] = i
+        if (model_params[:, -2] > 0).sum() < 20:
+            # Add intermediate models
+            ind = np.arange(len(self.model_data), dtype=int)[mask][model_params[:, -2] > 0]
+            for ii in ind:
+                m1 = self.model_data[ii]
+                m2 = self.model_data[ii + 1]
+        return model_params[model_params[:, -2] > 0]
+
+    
     def get_estimates(self, row, dump=False):
         """
         Estimate distance and other parameters set in self.fitted_columns.
@@ -313,13 +343,14 @@ class UniDAMTool(object):
             return validate
         self._push_to_fortran(row)
         # HERE THINGS HAPPEN!
-        m_count = mf.find_best()
+        #m_count = mf.find_best()
         # Now deal with the result:
-        if m_count == 0:
-            print(('No model fitting for %s' % row[self.id_column]))
-            return {'id': row[self.id_column],
-                    'error': 'No model fitting'}
-        model_params = mf.model_params[:m_count]
+        #if m_count == 0:
+        #    print(('No model fitting for %s' % row[self.id_column]))
+        #    return {'id': row[self.id_column],
+        #            'error': 'No model fitting'}
+        #model_params = mf.model_params[:m_count]
+        model_params = self.get_fitting_models(row)
         stages = np.asarray(model_params[:, 0], dtype=int)
         uniq_stages = np.unique(stages)
         mode_weight = np.zeros(len(uniq_stages))

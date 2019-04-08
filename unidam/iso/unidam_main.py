@@ -23,7 +23,7 @@ from unidam.iso.model_fitter import model_fitter as mf  # pylint: disable=no-mem
 from unidam.iso.histogram_splitter import histogram_splitter
 from unidam.utils.fit import find_best_fit
 from unidam.utils.mathematics import wstatistics, quantile, bin_estimate, \
-                                     to_borders, move_to_end
+                                     to_borders, move_to_end, move_to_beginning
 from unidam.utils.confidence import find_confidence, ONE_SIGMA, THREE_SIGMA
 from unidam.utils.stats import to_bins, from_bins
 from unidam.utils import constants
@@ -158,6 +158,11 @@ class UniDAMTool(object):
             if item in self.fitted_columns and not mf.use_photometry:
                 raise ValueError('Distance-related output is requested, but'
                                  ' no photometry provided.')
+        if 'stage' not in self.fitted_columns:
+            self.fitted_columns.insert(0, 'stage')
+        else:
+            move_to_beginning(self.fitted_columns, 'stage')
+            #raise ValueError('stage column has to be in the list of fitted columns')
         # This is the index of column with output model weights.
         # In the output table (mf.model_data) there are columns for
         # fitted columns + columns for L_iso, L_sed and
@@ -186,7 +191,7 @@ class UniDAMTool(object):
                                       model_file)
         self._load_models(model_file)
 
-    def _names_to_indices(self, columns):
+    def _names_to_indices(self, columns, validate=False):
         """
         Convert a list of column names to name-index dictionary.
         """
@@ -196,6 +201,8 @@ class UniDAMTool(object):
         for name in columns:
             if name in self.model_column_names:
                 result.append((name, self.model_column_names.index(name)))
+            elif validate and name not in self.SPECIAL:
+                raise ValueError("%s column is not in the model, cannot fit" % name)
             else:
                 result.append((name, -1))
         return OrderedDict(result)
@@ -237,8 +244,8 @@ class UniDAMTool(object):
              self.model_data[:, -1][:, np.newaxis]))
         self.age_grid = np.asarray(table[2].data, dtype=float)
         self.model_column_names = [column.name for column in table[1].columns]
-        self.fitted_columns = self._names_to_indices(self.fitted_columns)
-        self.model_columns = self._names_to_indices(self.model_columns)
+        self.fitted_columns = self._names_to_indices(self.fitted_columns, validate=True)
+        self.model_columns = self._names_to_indices(self.model_columns, validate=True)
         self.default_bands = self._names_to_indices(self.default_bands)
         self.mag_names = np.array(list(self.default_bands.keys()), dtype=str)
         print('Pass to F90')
@@ -311,7 +318,7 @@ class UniDAMTool(object):
             mask *= np.abs(self.model_data[:, model] - param) \
                     <= (mf.max_param_err*param_err)
         if mask.sum() == 0:
-            print(('No model fitting for %s' % row[self.id_column]))
+            print('No model fitting for %s' % row[self.id_column])
             return None
         xsize = len(self.fitted_columns) + 4
         model_params = np.zeros((mask.sum(), xsize))
@@ -322,11 +329,34 @@ class UniDAMTool(object):
             else:
                 model_params[i, -1] = i
         if (model_params[:, -2] > 0).sum() < 20:
+            print('Adding more models for %s' % row[self.id_column])
             # Add intermediate models
             ind = np.arange(len(self.model_data), dtype=int)[mask][model_params[:, -2] > 0]
+            #import ipdb; ipdb.set_trace()
+            new_models = []
             for ii in ind:
                 m1 = self.model_data[ii]
+                #for offset in [1, -1]:
                 m2 = self.model_data[ii + 1]
+                if ii + 1 in ind:
+                    t_current = 0.5
+                else:
+                    t_current = 1.
+                    for param, param_err, model in zip(self.param, self.param_err,
+                                                       self.model_columns.values()):
+                        v1 = m1[model]
+                        v2 = m2[model]
+                        if v2 > v1:
+                            t_current = min(t_current,
+                                            np.abs(param + mf.max_param_err*param_err - v1) / (v2 - v1))
+                        elif v1 < v2:  # If v1 == v2 then t is not updated.
+                            t_current = min(t_current,
+                                            np.abs(param - mf.max_param_err*param_err - v1) / (v1 - v2))
+                extra_models = m1 + np.linspace(0, t_current, 10)[:, np.newaxis] * m2
+                # This is an extra fix for the stage column.
+                extra_models[:, 0] = m1[0]
+                for model in extra_models:
+                    new_models.append(mf.process_model(model, xsize))                
         return model_params[model_params[:, -2] > 0]
 
     
@@ -351,6 +381,9 @@ class UniDAMTool(object):
         #            'error': 'No model fitting'}
         #model_params = mf.model_params[:m_count]
         model_params = self.get_fitting_models(row)
+        if model_params is None:
+            return {'id': row[self.id_column],
+                    'error': 'No model fitting'}
         stages = np.asarray(model_params[:, 0], dtype=int)
         uniq_stages = np.unique(stages)
         mode_weight = np.zeros(len(uniq_stages))

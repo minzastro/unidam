@@ -73,37 +73,39 @@ def do_fit_linear(xin, yin):
     """
     Fit a trunc_line function.
     """
+    best = np.polyfit(xin, yin, 1)
     lower = -1
     upper = len(xin)
     mode = yin.max()
     modepos = np.argmax(yin)
-    residuals = np.ones(modepos) * np.inf
-    best = np.polyfit(xin, yin, 1)
-    while lower < modepos and yin[lower + 1] < mode * 0.2:
-        # Increase lower bound gradually,
-        # re-fitting at each step, while residuals decrease.
-        lower += 1
-        test = np.polyfit(xin[lower:upper], yin[lower:upper], 1)
-        test_r = np.sum((yin[lower:upper] -
-                         np.polyval(test, xin[lower:upper]))**2) + \
-                 np.sum(yin[:lower]**2) + np.sum(yin[upper:]**2)
-        residuals[lower] = test_r
-    lower = np.argmin(residuals)
-    if np.any(~np.isinf(residuals)):
-        best = np.copy(test)
-    residuals = np.ones(upper - modepos) * np.inf
-    while upper >= modepos and yin[upper - 1] < mode * 0.2:
-        # Decrease upper bound gradually,
-        # re-fitting at each step, while residuals decrease.
-        upper -= 1
-        test = np.polyfit(xin[lower:upper], yin[lower:upper], 1)
-        test_r = np.sum((yin[lower:upper] -
-                         np.polyval(test, xin[lower:upper]))**2) + \
-                 np.sum(yin[:lower]**2) + np.sum(yin[upper:]**2)
-        residuals[upper - modepos - 1] = test_r
-    if np.any(~np.isinf(residuals)):
-        upper = np.argmin(residuals) + modepos
-        best = np.copy(test)
+    if modepos > 0:
+        residuals = np.ones(modepos) * np.inf
+        while lower < modepos and yin[lower + 1] < mode * 0.2:
+            # Increase lower bound gradually,
+            # re-fitting at each step, while residuals decrease.
+            lower += 1
+            test = np.polyfit(xin[lower:upper], yin[lower:upper], 1)
+            test_r = np.sum((yin[lower:upper] -
+                             np.polyval(test, xin[lower:upper]))**2) + \
+                     np.sum(yin[:lower]**2) + np.sum(yin[upper:]**2)
+            residuals[lower] = test_r
+        lower = np.argmin(residuals)
+        if np.any(~np.isinf(residuals)):
+            best = np.copy(test)
+    if upper > modepos:
+        residuals = np.ones(upper - modepos) * np.inf
+        while upper >= modepos and yin[upper - 1] < mode * 0.2:
+            # Decrease upper bound gradually,
+            # re-fitting at each step, while residuals decrease.
+            upper -= 1
+            test = np.polyfit(xin[lower:upper], yin[lower:upper], 1)
+            test_r = np.sum((yin[lower:upper] -
+                             np.polyval(test, xin[lower:upper]))**2) + \
+                     np.sum(yin[:lower]**2) + np.sum(yin[upper:]**2)
+            residuals[upper - modepos - 1] = test_r
+        if np.any(~np.isinf(residuals)):
+            upper = np.argmin(residuals) + modepos
+            best = np.copy(test)
     result = [best[0], best[1], xin[lower], xin[upper - 1]]
     return [result, kl_divergence(xin, trunc_line, result, yin)]
 

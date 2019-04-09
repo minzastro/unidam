@@ -73,12 +73,13 @@ def do_fit_linear(xin, yin):
     """
     Fit a trunc_line function.
     """
-    lower = 0
+    lower = -1
     upper = len(xin)
-    first = np.polyfit(xin, yin, 1)
-    residuals = np.sum((yin - np.polyval(first, xin))**2)
     mode = yin.max()
-    while lower < upper - 2 and yin[lower] < mode * 1e-2:
+    modepos = np.argmax(yin)
+    residuals = np.ones(modepos) * np.inf
+    best = np.polyfit(xin, yin, 1)
+    while lower < modepos and yin[lower + 1] < mode * 0.2:
         # Increase lower bound gradually,
         # re-fitting at each step, while residuals decrease.
         lower += 1
@@ -86,13 +87,12 @@ def do_fit_linear(xin, yin):
         test_r = np.sum((yin[lower:upper] -
                          np.polyval(test, xin[lower:upper]))**2) + \
                  np.sum(yin[:lower]**2) + np.sum(yin[upper:]**2)
-        if test_r > residuals:
-            lower -= 1
-            break
-        else:
-            first = test
-            residuals = test_r
-    while lower < upper - 2 and yin[upper - 1] < mode * 1e-2:
+        residuals[lower] = test_r
+    lower = np.argmin(residuals)
+    if np.any(~np.isinf(residuals)):
+        best = np.copy(test)
+    residuals = np.ones(upper - modepos) * np.inf
+    while upper >= modepos and yin[upper - 1] < mode * 0.2:
         # Decrease upper bound gradually,
         # re-fitting at each step, while residuals decrease.
         upper -= 1
@@ -100,13 +100,11 @@ def do_fit_linear(xin, yin):
         test_r = np.sum((yin[lower:upper] -
                          np.polyval(test, xin[lower:upper]))**2) + \
                  np.sum(yin[:lower]**2) + np.sum(yin[upper:]**2)
-        if test_r > residuals:
-            upper += 1
-            break
-        else:
-            first = test
-            residuals = test_r
-    result = [first[0], first[1], xin[lower], xin[upper - 1]]
+        residuals[upper - modepos - 1] = test_r
+    if np.any(~np.isinf(residuals)):
+        upper = np.argmin(residuals) + modepos
+        best = np.copy(test)
+    result = [best[0], best[1], xin[lower], xin[upper - 1]]
     return [result, kl_divergence(xin, trunc_line, result, yin)]
 
 

@@ -74,11 +74,11 @@ def do_fit_linear(xin, yin):
     Fit a trunc_line function.
     """
     best = np.polyfit(xin, yin, 1)
-    lower = -1
     upper = len(xin)
     mode = yin.max()
     modepos = np.argmax(yin)
     if modepos > 0:
+        lower = -1
         residuals = np.ones(modepos) * np.inf
         while lower < modepos and yin[lower + 1] < mode * 0.2:
             # Increase lower bound gradually,
@@ -92,6 +92,8 @@ def do_fit_linear(xin, yin):
         lower = np.argmin(residuals)
         if np.any(~np.isinf(residuals)):
             best = np.copy(test)
+    else:
+        lower = 0
     if upper > modepos:
         residuals = np.ones(upper - modepos) * np.inf
         while upper >= modepos and yin[upper - 1] < mode * 0.2:

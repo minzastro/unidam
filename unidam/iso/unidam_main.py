@@ -328,35 +328,39 @@ class UniDAMTool(object):
                 model_params[i, -2] = 0.
             else:
                 model_params[i, -1] = i
-        if (model_params[:, -2] > 0).sum() < 20:
+        if (model_params[:, -2] > 0).sum() < 50:
             print('Adding more models for %s' % row[self.id_column])
             # Add intermediate models
             ind = np.arange(len(self.model_data), dtype=int)[mask][model_params[:, -2] > 0]
-            #import ipdb; ipdb.set_trace()
             new_models = []
             for ii in ind:
                 m1 = self.model_data[ii]
-                #for offset in [1, -1]:
-                m2 = self.model_data[ii + 1]
-                if ii + 1 in ind:
-                    t_current = 0.5
-                else:
-                    t_current = 1.
-                    for param, param_err, model in zip(self.param, self.param_err,
-                                                       self.model_columns.values()):
-                        v1 = m1[model]
-                        v2 = m2[model]
-                        if v2 > v1:
-                            t_current = min(t_current,
-                                            np.abs(param + mf.max_param_err*param_err - v1) / (v2 - v1))
-                        elif v1 < v2:  # If v1 == v2 then t is not updated.
-                            t_current = min(t_current,
-                                            np.abs(param - mf.max_param_err*param_err - v1) / (v1 - v2))
-                extra_models = m1 + np.linspace(0, t_current, 10)[:, np.newaxis] * m2
-                # This is an extra fix for the stage column.
-                extra_models[:, 0] = m1[0]
-                for model in extra_models:
-                    new_models.append(mf.process_model(model, xsize))                
+                for offset in [1, -1]:
+                    m2 = self.model_data[ii + offset]
+                    if ii + offset in ind:
+                        t_current = 0.5
+                    else:
+                        t_current = 1.
+                        for param, param_err, model in zip(self.param, self.param_err,
+                                                           self.model_columns.values()):
+                            v1 = m1[model]
+                            v2 = m2[model]
+                            if v2 > v1:
+                                t_current = min(t_current,
+                                                np.abs(param + mf.max_param_err*param_err - v1) / (v2 - v1))
+                            elif v1 > v2:  # If v1 == v2 then t is not updated.
+                                t_current = min(t_current,
+                                                np.abs(param - mf.max_param_err*param_err - v1) / (v1 - v2))
+                    extra_models = m1 + np.linspace(0, t_current, 50)[:, np.newaxis] * (m2 - m1)
+                    # This is an extra fix for the stage column.
+                    extra_models[:, 0] = m1[0]
+                    save_size = len(new_models)
+                    for model in extra_models:
+                        res = mf.process_model(model, xsize)
+                        if res[0] > 0:
+                            new_models.append(res[1])
+                        else:
+            model_params = np.array(new_models)
         return model_params[model_params[:, -2] > 0]
 
     

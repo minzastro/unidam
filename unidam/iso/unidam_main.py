@@ -111,7 +111,7 @@ class UniDAMTool(object):
     RV = {band: constants.R_FACTORS[band] / constants.R_FACTORS['V']
           for band in constants.R_FACTORS}
 
-    def __init__(self, config_filename=None):
+    def __init__(self, config_filename=None, config_override=None):
         self.mag = None
         self.mag_matrix = None
         self.mag_err = None
@@ -132,6 +132,13 @@ class UniDAMTool(object):
         if not os.path.exists(config_filename):
             raise Exception('Config file %s not found' % config_filename)
         config.read(config_filename)
+        if config_override is not None:
+            for key, value in config_override.items():
+                if '.' in key:
+                    group, key = key.split('.')
+                else:
+                    group = 'general'
+                config.set(group, key, str(value))
         for key, value in self.DEFAULTS.items():
             if not config.has_option('general', key):
                 config.set('general', key, str(value))
@@ -328,7 +335,7 @@ class UniDAMTool(object):
                 model_params[i, -2] = 0.
             else:
                 model_params[i, -1] = i
-        if (model_params[:, -2] > 0).sum() < 50:
+        if (model_params[:, -2] > 0).sum() < 50 and (model_params[:, -2] > 0).sum() > 0:
             print('Adding more models for %s' % row[self.id_column])
             # Add intermediate models
             ind = np.arange(len(self.model_data), dtype=int)[mask][model_params[:, -2] > 0]
@@ -359,11 +366,11 @@ class UniDAMTool(object):
                         res = mf.process_model(model, xsize)
                         if res[0] > 0:
                             new_models.append(res[1])
-                        else:
-            model_params = np.array(new_models)
+                        #else:
+            model_params = np.atleast_2d(new_models)
         return model_params[model_params[:, -2] > 0]
 
-    
+
     def get_estimates(self, row, dump=False):
         """
         Estimate distance and other parameters set in self.fitted_columns.
@@ -601,6 +608,8 @@ class UniDAMTool(object):
                             )[0]
         hist = hist / (hist.sum() * (bins[1:] - bins[:-1]))
         if smooth is not None:
+            if isinstance(smooth, list) or isinstance(smooth, np.ndarray):
+                smooth = smooth[0]
             if name in ['distance_modulus', 'extinction']:
                 hist = gaussian_filter1d(
                     hist,

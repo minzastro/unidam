@@ -330,7 +330,7 @@ class UniDAMTool(object):
         xsize = len(self.fitted_columns) + 4
         model_params = np.zeros((mask.sum(), xsize))
         for i, model in enumerate(self.model_data[mask]):
-            success, model_params[i] = mf.process_model(model, xsize)
+            success, model_params[i] = mf.process_model(i, model, xsize)
             if not success:
                 model_params[i, -2] = 0.
             else:
@@ -362,8 +362,8 @@ class UniDAMTool(object):
                     # This is an extra fix for the stage column.
                     extra_models[:, 0] = m1[0]
                     save_size = len(new_models)
-                    for model in extra_models:
-                        res = mf.process_model(model, xsize)
+                    for j, model in enumerate(extra_models):
+                        res = mf.process_model(-1, model, xsize)
                         if res[0] > 0:
                             new_models.append(res[1])
                         #else:
@@ -830,12 +830,16 @@ class UniDAMTool(object):
             raise ValueError('Cannot produce SED -- no distance estimate')
         elif 'extinction' not in self.fitted_columns:
             raise ValueError('Cannot produce SED -- no extinction estimate')
+        sed_dict = {'Predicted': {}, 'PredErr': {},
+                    'Observed': {}, 'ObsErr': {}}
+        if np.any(adata[:, self.w_column + 1] >= len(mf.models)) or \
+            np.any(adata[:, self.w_column + 1] < 0):
+            print("Cannot do anything for added models...so far")
+            return sed_dict
         mdata = mf.models[np.asarray(adata[:, self.w_column + 1] - 1, dtype=int)]
         dm = adata[:, list(self.fitted_columns.keys()).index('distance_modulus')]
         ext = adata[:, list(self.fitted_columns.keys()).index('extinction')]
         weight = adata[:, self.w_column]
-        sed_dict = {'Predicted': {}, 'PredErr': {},
-                    'Observed': {}, 'ObsErr': {}}
         for iband, band in enumerate(self.mag_names):
             sed_dict['Predicted'][band], sed_dict['PredErr'][band] = \
                 wstatistics(mdata[:, self.default_bands[band]] +

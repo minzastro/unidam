@@ -232,7 +232,8 @@ real function mu_d_to_distance(mu)
     mu_d_to_distance = 10**(mu*0.2 + 1)
 end function mu_d_to_distance
 
-subroutine process_model(model, out_size, success, out_model)
+subroutine process_model(model_id, model, out_size, success, out_model)
+  integer, intent(in) :: model_id
   real, intent(in) :: model(:)
   integer, intent(in) :: out_size
   logical, intent(out) :: success
@@ -329,7 +330,7 @@ subroutine process_model(model, out_size, success, out_model)
       if (debug) then
         write(68, *) model(model_columns), model(abs_mag), &
                      'Mag:', mag - model(abs_mag), &
-                     'Fit:', out_model(1:off), L_model, L_sed, p, i
+                     'Fit:', out_model(1:off), L_model, L_sed, p, model_id
       endif
       success = .false.
       return
@@ -349,11 +350,11 @@ subroutine process_model(model, out_size, success, out_model)
       endif
     endif
     out_model(prob+2) = p
-    out_model(prob+3) = i
+    out_model(prob+3) = model_id
     if (debug) then
       write(66, *) model(model_column_count), model(abs_mag), &
                    model(model_columns), model(model_column_count-1), -99, &
-                   out_model(1:prob+2), mag - model(abs_mag), L_model, L_sed, p, i, distance_prior
+                   out_model(1:prob+2), mag - model(abs_mag), L_model, L_sed, p, model_id
     endif
 end subroutine process_model
 

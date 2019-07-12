@@ -44,6 +44,9 @@ parser.add_argument('-t', '--time', action="store_true",
                     help='Add timing output (only in parallel mode)')
 parser.add_argument('-C', dest='config_override', action='append', default=[],
                     help='Override config params')
+parser.add_argument('--parallax-zero', type=float,
+                    default=0.0,
+                    help='Parallax zero point value')
 group = parser.add_mutually_exclusive_group()
 group.add_argument('-d', '--dump-results', action="store_true",
                     default=False,
@@ -64,6 +67,8 @@ for item in args.config_override:
 de = UniDAMTool(config_filename=args.config, config_override=override)
 de.id_column = 'id'  # Default ID column.
 idtype = data.columns[de.id_column].dtype
+if mf.parallax_known:
+    data[de.config['parallax']] += args.parallax_zero
 final = de.get_table(data, idtype)
 unfitted = Table()
 unfitted['id'] = Column(dtype=idtype)

@@ -77,7 +77,7 @@ def get_modified_chi2(offset, dof, sum_of_squares):
     return (np.sum(chi2_values < sum_of_squares) * 1e-4)
 
 
-class UniDAMTool(object):
+class UniDAMTool():
     """
     Estimating distance and extinction
     from model fitting + 2MASS/AllWISE magnitudes.
@@ -361,12 +361,10 @@ class UniDAMTool(object):
                     extra_models = m1 + np.linspace(0, t_current, 50)[:, np.newaxis] * (m2 - m1)
                     # This is an extra fix for the stage column.
                     extra_models[:, 0] = m1[0]
-                    save_size = len(new_models)
-                    for j, model in enumerate(extra_models):
+                    for model in extra_models:
                         res = mf.process_model(-1, model, xsize)
                         if res[0] > 0:
                             new_models.append(res[1])
-                        #else:
             model_params = np.atleast_2d(new_models)
         return model_params[model_params[:, -2] > 0]
 
@@ -383,14 +381,10 @@ class UniDAMTool(object):
         if validate is not None:
             return validate
         self._push_to_fortran(row)
+        if np.isinf(mf.parallax_l_correction):
+            return {'id': row[self.id_column],
+                    'error': 'Parallax is too negative'}
         # HERE THINGS HAPPEN!
-        #m_count = mf.find_best()
-        # Now deal with the result:
-        #if m_count == 0:
-        #    print(('No model fitting for %s' % row[self.id_column]))
-        #    return {'id': row[self.id_column],
-        #            'error': 'No model fitting'}
-        #model_params = mf.model_params[:m_count]
         model_params = self.get_fitting_models(row)
         if model_params is None:
             return {'id': row[self.id_column],
@@ -608,7 +602,7 @@ class UniDAMTool(object):
                             )[0]
         hist = hist / (hist.sum() * (bins[1:] - bins[:-1]))
         if smooth is not None:
-            if isinstance(smooth, list) or isinstance(smooth, np.ndarray):
+            if isinstance(smooth, (list, np.ndarray)):
                 smooth = smooth[0]
             if name in ['distance_modulus', 'extinction']:
                 hist = gaussian_filter1d(
@@ -828,7 +822,7 @@ class UniDAMTool(object):
         """
         if 'distance_modulus' not in self.fitted_columns:
             raise ValueError('Cannot produce SED -- no distance estimate')
-        elif 'extinction' not in self.fitted_columns:
+        if 'extinction' not in self.fitted_columns:
             raise ValueError('Cannot produce SED -- no extinction estimate')
         sed_dict = {'Predicted': {}, 'PredErr': {},
                     'Observed': {}, 'ObsErr': {}}
@@ -950,7 +944,7 @@ class UniDAMTool(object):
                 smooth = smooth_extinction
                 if len(smooth) == 2:
                     extinction_if_needed = xdata[:, ikey]
-            elif key == 'distance' or key == 'parallax':
+            elif key in ('distance', 'parallax'):
                 smooth = 0.2 * np.log(10.) * smooth_distance[0]
             else:
                 smooth = None

@@ -109,3 +109,10 @@ def move_to_end(arr, item):
     """
     if item in arr:
         arr.append(arr.pop(arr.index(item)))
+
+def move_to_beginning(arr, item):
+    """
+    Move item to the end of array (if present).
+    """
+    if item in arr:
+        arr.insert(0, arr.pop(arr.index(item)))

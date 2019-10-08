@@ -198,30 +198,31 @@ subroutine solve_for_distance_with_parallax(vector, solution)
 end subroutine solve_for_distance_with_parallax
 
 
-subroutine get_vector(i, vector, L_sednoext, mu_d_noext)
+subroutine get_vector(model_mags, vector, L_sednoext, mu_d_noext)
 !! Get vector for mu_d/extinction system of eq.
 !! and L_sednoext = L_sed with zero extinction.
-  integer, intent(in) :: i
+  !integer, intent(in) ::
+  real, intent(in) :: model_mags(:)
   real, intent(out) :: L_sednoext 
   real, intent(out) :: vector(2)
   real, intent(out) :: mu_d_noext
     if (parallax_known) then
-      vector(1) = sum((mag - models(i, abs_mag))*mag_err)
-      vector(2) = sum((mag - models(i, abs_mag))*mag_err*Ck)
+      vector(1) = sum((mag - model_mags)*mag_err)
+      vector(2) = sum((mag - model_mags)*mag_err*Ck)
       mu_d_noext = vector(1) / matrix0(1, 1)
-      L_sednoext = 0.5 * sum((mag - mu_d_noext - models(i, abs_mag))**2 * mag_err) + &
+      L_sednoext = 0.5 * sum((mag - mu_d_noext - model_mags)**2 * mag_err) + &
                    0.5 * (1. / mu_d_to_distance(mu_d_noext) - parallax)**2 / (parallax_error**2) + &
                    parallax_L_correction
     else ! No distance or parallax known
-      vector(1) = sum((mag - models(i, abs_mag))*mag_err)
+      vector(1) = sum((mag - model_mags)*mag_err)
       if (distance_prior.eq.1) then
         vector(1) = vector(1) + log(10.)*0.4
       else if (distance_prior.eq.2) then
         vector(1) = vector(1) + 0.2 * log(10.) * (2. - mu_d_to_distance(mu_d_noext)/prior_parameter) 
       endif
-      vector(2) = sum((mag - models(i, abs_mag))*mag_err*Ck)
+      vector(2) = sum((mag - model_mags)*mag_err*Ck)
       mu_d_noext = vector(1) / matrix0(1, 1)
-      L_sednoext = 0.5 * sum((mag - mu_d_noext - models(i, abs_mag))**2 * mag_err)
+      L_sednoext = 0.5 * sum((mag - mu_d_noext - model_mags)**2 * mag_err)
     endif
 end subroutine get_vector
 
@@ -231,12 +232,12 @@ real function mu_d_to_distance(mu)
     mu_d_to_distance = 10**(mu*0.2 + 1)
 end function mu_d_to_distance
 
-subroutine find_best(m_count)
-  !! Finding stellar parameters from observed + models
-  !> Maximum number of parameters for output
-  integer, parameter :: WSIZE = 30
-  !> Number of consistent models found.
-  integer, intent(out) :: m_count
+subroutine process_model(model_id, model, out_size, success, out_model)
+  integer, intent(in) :: model_id
+  real, intent(in) :: model(:)
+  integer, intent(in) :: out_size
+  logical, intent(out) :: success
+  real, intent(out) :: out_model(out_size)
   integer i
   integer off, prob
   real p, distance
@@ -244,131 +245,117 @@ subroutine find_best(m_count)
   real L_sednoext, mu_d_noext ! L_sed and mu_d if extinction == zero
   real vector(2)
   real mu_d(2) ! (mu_d, Av)
-    if (allocated(model_params)) then
-      deallocate(model_params)
-    endif
-    ! First we filter out models by *max_param_err* times sigma
-    do i = 1, size(param)
-      mask_models = mask_models .and. (abs(models(:, model_columns(i)) - param(i)).le.(max_param_err*param_err(i)))
-    enddo
+    success = .true.
     prob = size(fitted_columns) + count(special_columns) + 1 ! Here probablities start
-    allocate(model_params(size(mask_models), prob + 3))
-    m_count = 1
-    do i = 1, size(mask_models)
-      if (mask_models(i)) then ! Take only filtered models
-        ! Calculate chi^2 value for model parameters:
-        L_model = 0.5*sum(((models(i, model_columns) - param) / param_err)**2)
-        if (L_model.ge.0.5*max_param_err**2) then
-          ! Further filtering - replace box clipping by a circle
-          mask_models(i) = .false.
-          cycle
-        endif
-        mu_d(:) = -1.
-        off = size(fitted_columns)
-        model_params(m_count, :off) = models(i, fitted_columns)
-        if (use_photometry) then
-            call get_vector(i, vector, L_sednoext, mu_d_noext)
-            if ((size(mag_err).ge.2).or.(parallax_known)) then
-              if (parallax_known) then
-                  bic1 = 1e10
-                  ! This is just first guess, so abs(parallax) is Ok.
-                  mu_d(1) = -5. * (log10(abs(parallax)) + 1.)
-                  mu_d(2) = extinction
-                  call solve_for_distance_with_parallax(vector, mu_d)
-                  L_sed = 0.5*sum((mag - mu_d(1) - models(i, abs_mag) - Ck * mu_d(2))**2 * mag_err)
-                  L_sed = L_sed + 0.5 * (1. / mu_d_to_distance(mu_d(1)) - parallax)**2 / (parallax_error**2)
-                  if (mu_d(2) .ge. extinction) then
-                      L_sed = L_sed + 0.5 * (mu_d(2) - extinction)**2 / (extinction_error**2)
-                  endif
-                  L_sed = L_sed + parallax_L_correction
-              else
-                  ! If there are 2 or more bands observed
-                  ! then we can solve eq. 15
-                  bic1 = 2.*L_sednoext + log(float(size(mag_err)))
-                  call solve_for_distance(vector, mu_d)
-                  L_sed = 0.5*sum((mag - mu_d(1) - models(i, abs_mag) - Ck * mu_d(2))**2 * mag_err)
+    ! Calculate chi^2 value for model parameters:
+    L_model = 0.5*sum(((model(model_columns) - param) / param_err)**2)
+    if (L_model.ge.0.5*max_param_err**2) then
+      ! Further filtering - replace box clipping by a circle
+      success = .false.
+      return
+    endif
+    mu_d(:) = -1.
+    off = size(fitted_columns)
+    out_model(:off) = model(fitted_columns)
+    if (use_photometry) then
+        call get_vector(model(abs_mag), vector, L_sednoext, mu_d_noext)
+        if ((size(mag_err).ge.2).or.(parallax_known)) then
+          if (parallax_known) then
+              bic1 = 1e10
+              ! This is just first guess, so abs(parallax) is Ok.
+              mu_d(1) = -5. * (log10(abs(parallax)) + 1.)
+              mu_d(2) = extinction
+              call solve_for_distance_with_parallax(vector, mu_d)
+              L_sed = 0.5*sum((mag - mu_d(1) - model(abs_mag) - Ck * mu_d(2))**2 * mag_err)
+              L_sed = L_sed + 0.5 * (1. / mu_d_to_distance(mu_d(1)) - parallax)**2 / (parallax_error**2)
+              if (mu_d(2) .ge. extinction) then
+                  L_sed = L_sed + 0.5 * (mu_d(2) - extinction)**2 / (extinction_error**2)
               endif
-              bic2 = 2.*L_sed + 2.*log(float(size(mag_err)))
-              if (((mu_d(2).lt.0.0).and.(.not.allow_negative_extinction)) .or. &
-                  (bic1.le.bic2)) then
-                ! Negative extinction. This is not physical - replace it by 0 and recalculate dm
-                ! OR we get a better fit with no assumption on extinction at all.
-                L_sed = L_sednoext
-                mu_d(1) = mu_d_noext
-                mu_d(2) = 0d0
-              endif
-            else
-              L_sed = L_sednoext
-              mu_d(1) = mu_d_noext
-              mu_d(2) = 0d0
-            endif
-            ! Distance modulus
-            if (special_columns(1)) then
-                off = off + 1
-                model_params(m_count, off) = mu_d(1)
-            endif
-            ! Extinction
-            if (special_columns(2)) then
-                off = off + 1
-                model_params(m_count, off) = mu_d(2)
-            endif
-            ! Distance
-            distance = mu_d_to_distance(mu_d(1))
-            if (special_columns(3)) then
-                off = off + 1
-                model_params(m_count, off) = distance
-            endif
-            ! Parallax
-            if (special_columns(4)) then
-                off = off + 1
-                model_params(m_count, off) = 1. / distance
-            endif
-        else
-            L_sed = 0
-        endif
-        model_params(m_count, prob) = L_model
-        ! SED likelihood
-        model_params(m_count, prob+1) = L_sed
-        if (use_magnitude_probability) then
-           ! Multiply chi2 by residuals of SED fit
-           p = exp(-L_model - L_sed)
-        else
-           p = exp(-L_model)
-        endif
-        if (isnan(L_sed).or.(p .le. tiny(1.))) then
-          if (debug) then
-            write(68, *) models(i, model_columns), models(i, abs_mag), &
-                         'Mag:', mag - models(i, abs_mag), &
-                         'Fit:', model_params(m_count, 1:off), L_model, L_sed, p, i
+              L_sed = L_sed + parallax_L_correction
+          else
+              ! If there are 2 or more bands observed
+              ! then we can solve eq. 15
+              bic1 = 2.*L_sednoext + log(float(size(mag_err)))
+              call solve_for_distance(vector, mu_d)
+              L_sed = 0.5*sum((mag - mu_d(1) - model(abs_mag) - Ck * mu_d(2))**2 * mag_err)
           endif
-          mask_models(i) = .false.
-          cycle
-        endif
-        if (use_model_weight) then
-          ! Multiply by model weight (combined of age and mass weighting)
-          p = p * models(i, model_column_count)
-        endif
-        if (use_photometry) then
-          ! Prevent the use of distance prior when no photometry
-          ! is used and therefore no distance is estimated.
-          if (distance_prior.eq.1) then
-            ! Multiply by d^2 - volume factor correction
-            p = p * distance * distance
-          else if (distance_prior.eq.2) then
-            p = p * (distance * distance * exp(-distance / prior_parameter))
+          bic2 = 2.*L_sed + 2.*log(float(size(mag_err)))
+          if (((mu_d(2).lt.0.0).and.(.not.allow_negative_extinction)) .or. &
+              (bic1.le.bic2)) then
+            ! Negative extinction. This is not physical - replace it by 0 and recalculate dm
+            ! OR we get a better fit with no assumption on extinction at all.
+            L_sed = L_sednoext
+            mu_d(1) = mu_d_noext
+            mu_d(2) = 0d0
           endif
+        else
+          L_sed = L_sednoext
+          mu_d(1) = mu_d_noext
+          mu_d(2) = 0d0
         endif
-        model_params(m_count, prob+2) = p
-        model_params(m_count, prob+3) = i
-        if (debug) then
-          write(66, *) models(i, model_column_count), models(i, abs_mag), &
-                       models(i, model_columns), models(i, model_column_count-1), -99, &
-                       model_params(m_count, 1:prob+2), mag - models(i, abs_mag), L_model, L_sed, p, i, distance_prior
+        ! Distance modulus
+        if (special_columns(1)) then
+            off = off + 1
+            out_model(off) = mu_d(1)
         endif
-        m_count = m_count + 1
+        ! Extinction
+        if (special_columns(2)) then
+            off = off + 1
+            out_model(off) = mu_d(2)
+        endif
+        ! Distance
+        distance = mu_d_to_distance(mu_d(1))
+        if (special_columns(3)) then
+            off = off + 1
+            out_model(off) = distance
+        endif
+        ! Parallax
+        if (special_columns(4)) then
+            off = off + 1
+            out_model(off) = 1. / distance
+        endif
+    else
+        L_sed = 0
+    endif
+    out_model(prob) = L_model
+    ! SED likelihood
+    out_model(prob+1) = L_sed
+    if (use_magnitude_probability) then
+       ! Multiply chi2 by residuals of SED fit
+       p = exp(-L_model - L_sed)
+    else
+       p = exp(-L_model)
+    endif
+    if (isnan(L_sed).or.(p .le. tiny(1.))) then
+      if (debug) then
+        write(68, *) model(model_columns), model(abs_mag), &
+                     'Mag:', mag - model(abs_mag), &
+                     'Fit:', out_model(1:off), L_model, L_sed, p, model_id
       endif
-    enddo
-    m_count = m_count - 1
-end subroutine find_best
+      success = .false.
+      return
+    endif
+    if (use_model_weight) then
+      ! Multiply by model weight (combined of age and mass weighting)
+      p = p * model(model_column_count)
+    endif
+    if (use_photometry) then
+      ! Prevent the use of distance prior when no photometry
+      ! is used and therefore no distance is estimated.
+      if (distance_prior.eq.1) then
+        ! Multiply by d^2 - volume factor correction
+        p = p * distance * distance
+      else if (distance_prior.eq.2) then
+        p = p * (distance * distance * exp(-distance / prior_parameter))
+      endif
+    endif
+    out_model(prob+2) = p
+    out_model(prob+3) = model_id
+    if (debug) then
+      write(66, *) model(model_column_count), model(abs_mag), &
+                   model(model_columns), model(model_column_count-1), -99, &
+                   out_model(1:prob+2), mag - model(abs_mag), L_model, L_sed, p, model_id
+    endif
+end subroutine process_model
 
 end module model_fitter

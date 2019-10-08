@@ -72,7 +72,7 @@ args = parser.parse_args()
 
 data = Table.read(args.input)
 config = ConfigObj(args.config)
-print(config['keep'])
+
 if 'keep' in config:
     if isinstance(config['keep'], str):
         keep = config['keep'].split(',')
@@ -85,7 +85,6 @@ if 'keep' in config:
 else:
     keep = []
 
-print(keep)
 if args.ra is None:
     if 'ra' not in config['mapping']:
         raise ValueError('RA must be provided in mapping or as a command line parameter')
@@ -128,7 +127,7 @@ else:
     c = SkyCoord(ra=data[ra], dec=data[dec], frame='icrs')
     data['l'] = c.galactic.l.degree
     data['b'] = c.galactic.b.degree
-keep.extend(['l', 'b'])
+keep.extend([ra, dec, 'l', 'b'])
 
 has_matches = config.get('prematched', default=[])
 need_matches = config.get('needmatch', default=['2MASS', 'AllWISE', 'Gaia'])
@@ -143,7 +142,6 @@ if 'Gaia' in has_matches:
     if np.nanmax(data['parallax_error']) > 1e-2:
         data['parallax'] *= 1e-3
         data['parallax_error'] *= 1e-3
-print(keep)
 data.keep_columns(set(keep))
 
 def clean(table):
@@ -173,6 +171,7 @@ if '2MASS' not in has_matches:
                          'errHalfMaj', 'errHalfMin', 'errPosAng',
                          'X', 'MeasureJD'])
     clean(data)
+
 if 'AllWISE' not in has_matches:
     print('XMatching with AllWISE')
     data = XMatch.query(cat1=data,
@@ -189,10 +188,10 @@ if 'AllWISE' not in has_matches:
                          'e_W3mag', 'e_W4mag',
                          'pmRA', 'e_pmRA', 'pmDE', 'e_pmDE', 'ID', 'd2M'] +
                         bad_col)
+
 # TODO: make this an option.
 if 'Gaia' not in has_matches:
     print('XMatching with Gaia')
-    print(data.colnames)
     data = XMatch.query(cat1=data,
                         cat2='vizier:I/345/gaia2',
                         max_distance=3 * u.arcsec,
@@ -200,7 +199,6 @@ if 'Gaia' not in has_matches:
                         #colRA2='RA_ICRS', colDec2='DE_ICRS',
                         responseformat='votable',
                         selection='best')
-    print(data.colnames)
     data.remove_columns(['ra_epoch2000', 'dec_epoch2000',
                          'errHalfMaj', 'errHalfMin', 'errPosAng',
                          'ra', 'ra_error', 'dec', 'dec_error',

@@ -4,8 +4,24 @@ from future import standard_library
 standard_library.install_aliases()
 import numpy as np
 from scipy.stats import norm, truncnorm
-from unidam.skewnorm_boosted import skewnorm_boosted as skewnorm
-from unidam.studentst_boosted import studentst_boosted as studentst
+#from unidam.skewnorm_boosted import skewnorm_boosted as skewnorm
+#from unidam.studentst_boosted import studentst_boosted as studentst
+try:
+    from unidam.skewnorm_boosted import skewnorm_boosted as skewnorm
+except ImportError:
+    # No skewnorm_boost library available.
+    # A local python-based version will be used,
+    # which is considerably slower.
+    from unidam.utils.skewnorm_local import skewnorm_local as skewnorm
+
+try:
+    import studentst_boost as studentst
+except ImportError:
+    # No studentst_boost library available.
+    # A local python-based version will be used,
+    # which is considerably slower.
+    from scipy.stats import t as studentst
+
 from unidam.utils.trunc_revexpon import trunc_revexpon
 from unidam.utils.trunc_line import TruncLine
 

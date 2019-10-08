@@ -11,7 +11,6 @@ from scipy.stats import norm, truncnorm
 from scipy.optimize import curve_fit
 try:
     import skewnorm_boost
-
     def skew_gauss(x, mu, sigma, alpha):
         """
         Skewed Gaussian distribution.

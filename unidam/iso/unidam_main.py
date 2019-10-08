@@ -23,7 +23,7 @@ from unidam.iso.model_fitter import model_fitter as mf  # pylint: disable=no-mem
 from unidam.iso.histogram_splitter import histogram_splitter
 from unidam.utils.fit import find_best_fit
 from unidam.utils.mathematics import wstatistics, quantile, bin_estimate, \
-                                     to_borders, move_to_end
+                                     to_borders, move_to_end, move_to_beginning
 from unidam.utils.confidence import find_confidence, ONE_SIGMA, THREE_SIGMA
 from unidam.utils.stats import to_bins, from_bins
 from unidam.utils import constants
@@ -77,7 +77,7 @@ def get_modified_chi2(offset, dof, sum_of_squares):
     return (np.sum(chi2_values < sum_of_squares) * 1e-4)
 
 
-class UniDAMTool(object):
+class UniDAMTool():
     """
     Estimating distance and extinction
     from model fitting + 2MASS/AllWISE magnitudes.
@@ -111,7 +111,7 @@ class UniDAMTool(object):
     RV = {band: constants.R_FACTORS[band] / constants.R_FACTORS['V']
           for band in constants.R_FACTORS}
 
-    def __init__(self, config_filename=None):
+    def __init__(self, config_filename=None, config_override=None):
         self.mag = None
         self.mag_matrix = None
         self.mag_err = None
@@ -132,6 +132,13 @@ class UniDAMTool(object):
         if not os.path.exists(config_filename):
             raise Exception('Config file %s not found' % config_filename)
         config.read(config_filename)
+        if config_override is not None:
+            for key, value in config_override.items():
+                if '.' in key:
+                    group, key = key.split('.')
+                else:
+                    group = 'general'
+                config.set(group, key, str(value))
         for key, value in self.DEFAULTS.items():
             if not config.has_option('general', key):
                 config.set('general', key, str(value))
@@ -158,6 +165,11 @@ class UniDAMTool(object):
             if item in self.fitted_columns and not mf.use_photometry:
                 raise ValueError('Distance-related output is requested, but'
                                  ' no photometry provided.')
+        if 'stage' not in self.fitted_columns:
+            self.fitted_columns.insert(0, 'stage')
+        else:
+            move_to_beginning(self.fitted_columns, 'stage')
+            #raise ValueError('stage column has to be in the list of fitted columns')
         # This is the index of column with output model weights.
         # In the output table (mf.model_data) there are columns for
         # fitted columns + columns for L_iso, L_sed and
@@ -186,7 +198,7 @@ class UniDAMTool(object):
                                       model_file)
         self._load_models(model_file)
 
-    def _names_to_indices(self, columns):
+    def _names_to_indices(self, columns, validate=False):
         """
         Convert a list of column names to name-index dictionary.
         """
@@ -196,6 +208,8 @@ class UniDAMTool(object):
         for name in columns:
             if name in self.model_column_names:
                 result.append((name, self.model_column_names.index(name)))
+            elif validate and name not in self.SPECIAL:
+                raise ValueError("%s column is not in the model, cannot fit" % name)
             else:
                 result.append((name, -1))
         return OrderedDict(result)
@@ -231,10 +245,14 @@ class UniDAMTool(object):
             #self.model_data = np.asarray(table[1].data.tolist(), dtype=float)
             print('Saving...')
             np.save(filename + '.npy', self.model_data)
+        self.model_data = np.hstack(
+            (self.model_data[:, :-1],
+             np.arange(len(self.model_data))[:, np.newaxis],
+             self.model_data[:, -1][:, np.newaxis]))
         self.age_grid = np.asarray(table[2].data, dtype=float)
         self.model_column_names = [column.name for column in table[1].columns]
-        self.fitted_columns = self._names_to_indices(self.fitted_columns)
-        self.model_columns = self._names_to_indices(self.model_columns)
+        self.fitted_columns = self._names_to_indices(self.fitted_columns, validate=True)
+        self.model_columns = self._names_to_indices(self.model_columns, validate=True)
         self.default_bands = self._names_to_indices(self.default_bands)
         self.mag_names = np.array(list(self.default_bands.keys()), dtype=str)
         print('Pass to F90')
@@ -288,7 +306,8 @@ class UniDAMTool(object):
             mf.matrix_det = 0.  # Will be unsused anyway
         if self.mag.size > 0:
             mf.alloc_mag(self.mag, self.mag_err, self.Rk)
-        mf.alloc_param(self.param, self.param_err)
+        if len(self.param) > 0:
+            mf.alloc_param(self.param, self.param_err)
         # Collect model-file column indices of fitted columns
         fitted = [item for item in list(self.fitted_columns.values()) if item >= 0]
         mf.alloc_settings(self.abs_mag, list(self.model_columns.values()),
@@ -299,6 +318,58 @@ class UniDAMTool(object):
             mf.parallax_l_correction = np.log(norm.cdf(mf.parallax / mf.parallax_error))
             mf.extinction = row[self.config['extinction']]
             mf.extinction_error = row[self.config['extinction_err']]
+
+    def get_fitting_models(self, row):
+        #import ipdb; ipdb.set_trace()
+        mask = np.ones(len(self.model_data), dtype=bool)
+        for param, param_err, model in zip(self.param, self.param_err,
+                                           self.model_columns.values()):
+            mask *= np.abs(self.model_data[:, model] - param) \
+                    <= (mf.max_param_err*param_err)
+        if mask.sum() == 0:
+            print('No model fitting for %s' % row[self.id_column])
+            return None
+        xsize = len(self.fitted_columns) + 4
+        model_params = np.zeros((mask.sum(), xsize))
+        for i, model in enumerate(self.model_data[mask]):
+            success, model_params[i] = mf.process_model(i, model, xsize)
+            if not success:
+                model_params[i, -2] = 0.
+            else:
+                model_params[i, -1] = i
+        if (model_params[:, -2] > 0).sum() < 50 and (model_params[:, -2] > 0).sum() > 0:
+            print('Adding more models for %s' % row[self.id_column])
+            # Add intermediate models
+            ind = np.arange(len(self.model_data), dtype=int)[mask][model_params[:, -2] > 0]
+            new_models = []
+            for ii in ind:
+                m1 = self.model_data[ii]
+                for offset in [1, -1]:
+                    m2 = self.model_data[ii + offset]
+                    if ii + offset in ind:
+                        t_current = 0.5
+                    else:
+                        t_current = 1.
+                        for param, param_err, model in zip(self.param, self.param_err,
+                                                           self.model_columns.values()):
+                            v1 = m1[model]
+                            v2 = m2[model]
+                            if v2 > v1:
+                                t_current = min(t_current,
+                                                np.abs(param + mf.max_param_err*param_err - v1) / (v2 - v1))
+                            elif v1 > v2:  # If v1 == v2 then t is not updated.
+                                t_current = min(t_current,
+                                                np.abs(param - mf.max_param_err*param_err - v1) / (v1 - v2))
+                    extra_models = m1 + np.linspace(0, t_current, 50)[:, np.newaxis] * (m2 - m1)
+                    # This is an extra fix for the stage column.
+                    extra_models[:, 0] = m1[0]
+                    for model in extra_models:
+                        res = mf.process_model(-1, model, xsize)
+                        if res[0] > 0:
+                            new_models.append(res[1])
+            model_params = np.atleast_2d(new_models)
+        return model_params[model_params[:, -2] > 0]
+
 
     def get_estimates(self, row, dump=False):
         """
@@ -312,14 +383,14 @@ class UniDAMTool(object):
         if validate is not None:
             return validate
         self._push_to_fortran(row)
+        if np.isinf(mf.parallax_l_correction):
+            return {'id': row[self.id_column],
+                    'error': 'Parallax is too negative'}
         # HERE THINGS HAPPEN!
-        m_count = mf.find_best()
-        # Now deal with the result:
-        if m_count == 0:
-            print(('No model fitting for %s' % row[self.id_column]))
+        model_params = self.get_fitting_models(row)
+        if model_params is None:
             return {'id': row[self.id_column],
                     'error': 'No model fitting'}
-        model_params = mf.model_params[:m_count]
         stages = np.asarray(model_params[:, 0], dtype=int)
         uniq_stages = np.unique(stages)
         mode_weight = np.zeros(len(uniq_stages))
@@ -533,6 +604,8 @@ class UniDAMTool(object):
                             )[0]
         hist = hist / (hist.sum() * (bins[1:] - bins[:-1]))
         if smooth is not None:
+            if isinstance(smooth, (list, np.ndarray)):
+                smooth = smooth[0]
             if name in ['distance_modulus', 'extinction']:
                 hist = gaussian_filter1d(
                     hist,
@@ -751,14 +824,18 @@ class UniDAMTool(object):
         """
         if 'distance_modulus' not in self.fitted_columns:
             raise ValueError('Cannot produce SED -- no distance estimate')
-        elif 'extinction' not in self.fitted_columns:
+        if 'extinction' not in self.fitted_columns:
             raise ValueError('Cannot produce SED -- no extinction estimate')
+        sed_dict = {'Predicted': {}, 'PredErr': {},
+                    'Observed': {}, 'ObsErr': {}}
+        if np.any(adata[:, self.w_column + 1] >= len(mf.models)) or \
+            np.any(adata[:, self.w_column + 1] < 0):
+            print("Cannot do anything for added models...so far")
+            return sed_dict
         mdata = mf.models[np.asarray(adata[:, self.w_column + 1] - 1, dtype=int)]
         dm = adata[:, list(self.fitted_columns.keys()).index('distance_modulus')]
         ext = adata[:, list(self.fitted_columns.keys()).index('extinction')]
         weight = adata[:, self.w_column]
-        sed_dict = {'Predicted': {}, 'PredErr': {},
-                    'Observed': {}, 'ObsErr': {}}
         for iband, band in enumerate(self.mag_names):
             sed_dict['Predicted'][band], sed_dict['PredErr'][band] = \
                 wstatistics(mdata[:, self.default_bands[band]] +
@@ -869,7 +946,7 @@ class UniDAMTool(object):
                 smooth = smooth_extinction
                 if len(smooth) == 2:
                     extinction_if_needed = xdata[:, ikey]
-            elif key == 'distance' or key == 'parallax':
+            elif key in ('distance', 'parallax'):
                 smooth = 0.2 * np.log(10.) * smooth_distance[0]
             else:
                 smooth = None

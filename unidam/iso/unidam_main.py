@@ -306,7 +306,8 @@ class UniDAMTool():
             mf.matrix_det = 0.  # Will be unsused anyway
         if self.mag.size > 0:
             mf.alloc_mag(self.mag, self.mag_err, self.Rk)
-        mf.alloc_param(self.param, self.param_err)
+        if len(self.param) > 0:
+            mf.alloc_param(self.param, self.param_err)
         # Collect model-file column indices of fitted columns
         fitted = [item for item in list(self.fitted_columns.values()) if item >= 0]
         mf.alloc_settings(self.abs_mag, list(self.model_columns.values()),
@@ -319,6 +320,7 @@ class UniDAMTool():
             mf.extinction_error = row[self.config['extinction_err']]
 
     def get_fitting_models(self, row):
+        #import ipdb; ipdb.set_trace()
         mask = np.ones(len(self.model_data), dtype=bool)
         for param, param_err, model in zip(self.param, self.param_err,
                                            self.model_columns.values()):

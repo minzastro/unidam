@@ -159,7 +159,7 @@ if 'extinction' not in config['mapping'] or \
 
     data = astropy_join(data, extinction_data, keys=('pix'), join_type='left')
 
-if '2MASS' not in has_matches:
+if '2MASS' not in has_matches and '2MASS' in need_matches:
     print('XMatching with 2MASS')
     data = XMatch.query(cat1=data,
                         cat2='vizier:II/246/out',
@@ -172,7 +172,7 @@ if '2MASS' not in has_matches:
                          'X', 'MeasureJD'])
     clean(data)
 
-if 'AllWISE' not in has_matches:
+if 'AllWISE' not in has_matches and 'AllWISE' in need_matches:
     print('XMatching with AllWISE')
     data = XMatch.query(cat1=data,
                         cat2='vizier:II/328/allwise',
@@ -190,7 +190,7 @@ if 'AllWISE' not in has_matches:
                         bad_col)
 
 # TODO: make this an option.
-if 'Gaia' not in has_matches:
+if 'Gaia' not in has_matches and 'Gaia' in need_matches:
     print('XMatching with Gaia')
     data = XMatch.query(cat1=data,
                         cat2='vizier:I/345/gaia2',

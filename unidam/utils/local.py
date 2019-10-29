@@ -15,7 +15,7 @@ except ImportError:
     from unidam.utils.skewnorm_local import skewnorm_local as skewnorm
 
 try:
-    import studentst_boost as studentst
+    from unidam.studentst_boosted import studentst_boosted as studentst
 except ImportError:
     # No studentst_boost library available.
     # A local python-based version will be used,
@@ -79,6 +79,8 @@ def get_ydata(name, row, binx):
     """
     if row['%s_fit' % name] in 'GSTPLF':
         func, par = get_param(row['%s_fit' % name], row['%s_par' % name])
+        print(row['%s_fit' % name], func, par)
+        import ipdb; ipdb.set_trace()
         ydata = func.pdf(binx, *par)
         if np.any(ydata) < 0:
             print(name, ydata)

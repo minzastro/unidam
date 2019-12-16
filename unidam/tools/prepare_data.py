@@ -79,7 +79,7 @@ if 'keep' in config:
     elif isinstance(config['keep'], list):
         keep = config['keep']
     else:
-        raise ValueError('config keep value: %s, type unknown', config['keep']) 
+        raise ValueError('config keep value: %s, type unknown', config['keep'])
     if len(keep) == 1 and len(keep[0]) == 0:
         keep = []
 else:
@@ -214,6 +214,8 @@ if 'Gaia' not in has_matches and 'Gaia' in need_matches:
     clean(data)
     data['parallax'] *= 1e-3
     data['parallax_error'] *= 1e-3
+if 'parallax_zeropoint' in config and 'parallax' in data.colnames:
+    data['parallax'] -= float(config['parallax_zeropoint'])
 if args.force and os.path.exists(args.output):
     os.remove(args.output)
 data.write(args.output)

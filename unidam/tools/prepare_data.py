@@ -215,7 +215,7 @@ if 'Gaia' not in has_matches and 'Gaia' in need_matches:
     data['parallax'] *= 1e-3
     data['parallax_error'] *= 1e-3
 if 'parallax_zeropoint' in config and 'parallax' in data.colnames:
-    data['parallax'] -= float(config['parallax_zeropoint'])
+    data['parallax'] -= float(config['parallax_zeropoint']) * 1e-3
 if args.force and os.path.exists(args.output):
     os.remove(args.output)
 data.write(args.output)

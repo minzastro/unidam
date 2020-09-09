@@ -23,6 +23,7 @@ except ImportError:
     # A local python-based version will be used,
     # which is considerably slower.
     from unidam.utils.skewnorm_local import skewnorm_local as sn
+    print('Warning! no skewnorm_boost library found, using Python implementation')
 
     def skew_gauss(x, mu, sigma, alpha):
         """
@@ -125,7 +126,9 @@ def truncate_gauss(x, mu, sigma, a, b):
         # fit is not reliable.
         return np.zeros(x.shape)
     else:
-        return truncnorm.pdf(x, loc=mu, scale=sigma, a=alpha, b=beta)
+        ksi = (x - mu) / sigma
+        tmp = np.exp(-ksi**2)
+        return tmp / (tmp.sum() * (x[1] - x[0]))
 
 
 def exponent(x, mu, sigma):

@@ -232,13 +232,13 @@ real function mu_d_to_distance(mu)
     mu_d_to_distance = 10**(mu*0.2 + 1)
 end function mu_d_to_distance
 
-subroutine process_model(model_id, model, out_size, success, out_model)
+subroutine process_model(model_id, model, out_size, success, out_model, special_model)
   integer, intent(in) :: model_id
   real, intent(in) :: model(:)
   integer, intent(in) :: out_size
   logical, intent(out) :: success
   real, intent(out) :: out_model(out_size)
-  integer i
+  real, intent(out) :: special_model(5)
   integer off, prob
   real p, distance
   real L_model, L_sed, bic2, bic1
@@ -293,6 +293,7 @@ subroutine process_model(model_id, model, out_size, success, out_model)
           mu_d(1) = mu_d_noext
           mu_d(2) = 0d0
         endif
+        special_model(1:2) = mu_d
         ! Distance modulus
         if (special_columns(1)) then
             off = off + 1
@@ -305,6 +306,9 @@ subroutine process_model(model_id, model, out_size, success, out_model)
         endif
         ! Distance
         distance = mu_d_to_distance(mu_d(1))
+        special_model(3) = distance
+        special_model(4) = 1./distance
+        special_model(5) = model_id
         if (special_columns(3)) then
             off = off + 1
             out_model(off) = distance

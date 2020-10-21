@@ -331,8 +331,10 @@ class UniDAMTool():
             return None
         xsize = len(self.fitted_columns) + 4
         model_params = np.zeros((mask.sum(), xsize))
+        special_params = np.zeros((mask.sum(), 5))
         for i, model in enumerate(self.model_data[mask]):
-            success, model_params[i] = mf.process_model(i, model, xsize)
+            success, model_params[i], special_params[i] = \
+                mf.process_model(i, model, xsize)
             if not success:
                 model_params[i, -2] = 0.
             else:
@@ -342,6 +344,7 @@ class UniDAMTool():
             # Add intermediate models
             ind = np.arange(len(self.model_data), dtype=int)[mask][model_params[:, -2] > 0]
             new_models = []
+            new_special = []
             for ii in ind:
                 m1 = self.model_data[ii]
                 for offset in [1, -1]:
@@ -367,30 +370,13 @@ class UniDAMTool():
                         res = mf.process_model(-1, model, xsize)
                         if res[0] > 0:
                             new_models.append(res[1])
+                            new_special.append(res[2])
             model_params = np.atleast_2d(new_models)
-        return model_params[model_params[:, -2] > 0]
+            special_params = np.atleast_2d(new_special)
+        return model_params[model_params[:, -2] > 0], \
+            special_params[model_params[:, -2] > 0]
 
-
-    def get_estimates(self, row, dump=False):
-        """
-        Estimate distance and other parameters set in self.fitted_columns.
-        """
-        # Set maximum differnce between model and observation in units
-        # of the observational error.
-        self.config['dump'] = dump
-        self.prepare_row(row)
-        validate = self._validate_row(row[self.id_column])
-        if validate is not None:
-            return validate
-        self._push_to_fortran(row)
-        if np.isinf(mf.parallax_l_correction):
-            return {'id': row[self.id_column],
-                    'error': 'Parallax is too negative'}
-        # HERE THINGS HAPPEN!
-        model_params = self.get_fitting_models(row)
-        if model_params is None:
-            return {'id': row[self.id_column],
-                    'error': 'No model fitting'}
+    def get_mode_weights(self, row, model_params):
         stages = np.asarray(model_params[:, 0], dtype=int)
         uniq_stages = np.unique(stages)
         mode_weight = np.zeros(len(uniq_stages))
@@ -409,21 +395,39 @@ class UniDAMTool():
             print(('Zero weight for %s' % row[self.id_column]))
             return {'id': row[self.id_column],
                     'error': 'Zero weight'}
+        result = {}
+        for istage, stage in enumerate(uniq_stages):
+            result[stage] = mode_weight[istage]
+        return result
+
+    def get_estimates(self, row, dump=False):
+        """
+        Estimate distance and other parameters set in self.fitted_columns.
+        """
+        # Set maximum differnce between model and observation in units
+        # of the observational error.
+        self.config['dump'] = dump
+        self.prepare_row(row)
+        validate = self._validate_row(row[self.id_column])
+        if validate is not None:
+            return validate
+        self._push_to_fortran(row)
+        if np.isinf(mf.parallax_l_correction):
+            return {'id': row[self.id_column],
+                    'error': 'Parallax is too negative'}
+        # HERE THINGS HAPPEN!
+        model_params, model_special = self.get_fitting_models(row)
+        if model_params is None:
+            return {'id': row[self.id_column],
+                    'error': 'No model fitting'}
+        stage_weights = self.get_mode_weights(row, model_params)
         # Setting best stage
         result = []
-        for istage, stage in enumerate(uniq_stages):
-            if mode_weight[istage] < self.MIN_USPDF_WEIGHT:
-                # Ignore stages with a small weight
-                continue
-            stage_data = model_params[stages == stage]
-            stage_data = stage_data[stage_data[:, self.w_column] > 0]
-            # Split stage data into USPDFs
-            for part_data in self.split_multimodal(stage_data):
-                if np.sum(part_data[:, self.w_column]) / \
-                   total_mode_weight < self.MIN_USPDF_WEIGHT:
-                    # ignore USPDF with small weight
-                    continue
-                result.append(self.get_row(part_data, total_mode_weight))
+        stages = stage_weights.keys()
+        for part_weight, part_data, part_special in self.data_splitter(
+            stage_weights, model_params, model_special):
+                result.append(self.get_row(part_data, part_special,
+                                           part_weight))
         # Now enumerate USPDF priorities
         weights = [arow['uspdf_weight'] for arow in result]
         for ibest, best in enumerate(np.argsort(weights)[::-1]):
@@ -449,6 +453,27 @@ class UniDAMTool():
                 for key in todel:
                     del rrow[key]
         return result
+
+    def data_splitter(self, stage_weights, model_params, model_special):
+        stages = np.asarray(model_params[:, 0], dtype=int)
+        total_mode_weight = np.sum(list(stage_weights.values()))
+        #import ipdb; ipdb.set_trace()
+        for stage, mode_weight in stage_weights.items():
+            if mode_weight < self.MIN_USPDF_WEIGHT:
+                # Ignore stages with a small weight
+                continue
+            stage_data = model_params[stages == stage]
+            stage_data = stage_data[stage_data[:, self.w_column] > 0]
+            # Split stage data into USPDFs
+            for part_data in self.split_multimodal(stage_data):
+                part_weight = \
+                    np.sum(part_data[:, self.w_column]) / total_mode_weight
+                if part_weight < self.MIN_USPDF_WEIGHT:
+                    # ignore USPDF with small weight
+                    continue
+                part_model_ids = part_data[:, -1]
+                part_special = np.in1d(model_special[:, -1], part_model_ids)
+                yield part_weight, part_data, model_special[part_special]
 
     def prepare_row(self, row):
         """
@@ -871,7 +896,7 @@ class UniDAMTool():
             return {'p_sed': 1. - chi2.cdf(2. * l_sed, dof),
                     'p_best': 1. - chi2.cdf(2. * l_best, dof + len(self.model_columns))}
 
-    def get_row(self, xdata, wtotal):
+    def get_row(self, xdata, xspecial, xweight):
         """
         Prepare output row for the selection of models.
         """
@@ -918,7 +943,7 @@ class UniDAMTool():
         smooth_extinction = np.atleast_1d(smooth_extinction)
         new_result = {'stage': xdata[0, 0],
                       'uspdf_points': xdata.shape[0],
-                      'uspdf_weight': np.sum(xdata[:, self.w_column]) / wtotal,
+                      'uspdf_weight': xweight,
                      }
         new_result.update(self.get_psed_pbest(xdata, dof))
         if (self.config['dump'] or self.config['save_sed']) and \
@@ -933,13 +958,13 @@ class UniDAMTool():
                     new_result['sed_%s_relative' % band] = \
                         new_result['sed_%s' % band] / sed['ObsErr'][band]
         for ikey, key in enumerate(self.fitted_columns.keys()):
-            extinction_if_needed = None
+            extinction_if_needed = xspecial[:, 1]
             if key == 'stage':
                 continue
             elif key == 'distance_modulus':
                 new_result['distance_modulus_smooth'] = smooth_distance[0]
                 smooth = smooth_distance
-                if len(smooth) == 2:
+                if len(smooth) == 2 and ('extinction' in self.fitted_columns):
                     extinction_if_needed = xdata[:, list(self.fitted_columns.keys()).index('extinction')]
             elif key == 'extinction':
                 new_result['extinction_smooth'] = smooth_extinction[0]

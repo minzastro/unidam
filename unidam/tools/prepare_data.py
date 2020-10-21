@@ -129,6 +129,13 @@ else:
     data['b'] = c.galactic.b.degree
 keep.extend([ra, dec, 'l', 'b'])
 
+for column in ['T', 'feh', 'logg', 'delta_nu', 'nu_max']:
+    if column not in keep and column in data.colnames:
+        keep.append(column)
+    column = 'd'+column
+    if column not in keep and column in data.colnames:
+        keep.append(column)
+
 has_matches = config.get('prematched', default=[])
 need_matches = config.get('needmatch', default=['2MASS', 'AllWISE', 'Gaia'])
 if '2MASS' in has_matches and 'Jmag' in data.colnames:
@@ -142,6 +149,10 @@ if 'Gaia' in has_matches:
     if np.nanmax(data['parallax_error']) > 1e-2:
         data['parallax'] *= 1e-3
         data['parallax_error'] *= 1e-3
+for colname in keep:
+    if not colname in data.colnames:
+        print(f"Warning, column {colname} is not found, but it should be present.")
+        keep.pop(keep.index(colname))
 data.keep_columns(set(keep))
 
 def clean(table):

@@ -1,14 +1,4 @@
 #!/usr/bin/env python
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import absolute_import
-from builtins import open
-from builtins import range
-from builtins import int
-from builtins import str
-from future import standard_library
-standard_library.install_aliases()
 import os
 import warnings
 from collections import OrderedDict
@@ -339,7 +329,7 @@ class UniDAMTool():
                 model_params[i, -2] = 0.
             else:
                 model_params[i, -1] = i
-        if (model_params[:, -2] > 0).sum() < 50 and (model_params[:, -2] > 0).sum() > 0:
+        if 0 < (model_params[:, -2] > 0).sum() < 50:
             print('Adding more models for %s' % row[self.id_column])
             # Add intermediate models
             ind = np.arange(len(self.model_data), dtype=int)[mask][model_params[:, -2] > 0]
@@ -442,16 +432,7 @@ class UniDAMTool():
         result = self.assign_quality(result)
         if self.config['dump']:
             # Store results into a json-file.
-            self.dump_results(model_params, row, result)
-            # Delete *debug* keys in the results
-            # They are not to be exported to final fits table.
-            for rrow in result:
-                todel = []
-                for key in rrow:
-                    if key.endswith('debug'):
-                        todel.append(key)
-                for key in todel:
-                    del rrow[key]
+            result = self.dump_results(model_params, row, result)
         return result
 
     def data_splitter(self, stage_weights, model_params, model_special):
@@ -1051,6 +1032,17 @@ class UniDAMTool():
                   open('%s/dump_%s.json' % (self.config['dump_prefix'],
                                             idstr), 'w'),
                   indent=2, cls=NumpyAwareJSONEncoder)
+        # Delete *debug* keys in the results
+        # They are not to be exported to final fits table.
+        for rrow in result:
+            todel = []
+            for key in rrow:
+                if key.endswith('debug'):
+                    todel.append(key)
+            for key in todel:
+                del rrow[key]
+        return result
+
 
     def get_table(self, data, idtype=str):
         """

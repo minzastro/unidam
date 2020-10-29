@@ -246,6 +246,12 @@ subroutine process_model(model_id, model, out_size, success, out_model, special_
   real vector(2)
   real mu_d(2) ! (mu_d, Av)
     success = .true.
+    if (.not.(allocated(fitted_columns))) then
+        write(0, *) 'fitted_columns not initialized!'
+    endif
+    if ((.not.(allocated(param))).or.(.not.(allocated(param_err)))) then
+        write(0, *) 'param or param_err not initialized!'
+    endif
     prob = size(fitted_columns) + count(special_columns) + 1 ! Here probablities start
     ! Calculate chi^2 value for model parameters:
     L_model = 0.5*sum(((model(model_columns) - param) / param_err)**2)
@@ -257,6 +263,7 @@ subroutine process_model(model_id, model, out_size, success, out_model, special_
     mu_d(:) = -1.
     off = size(fitted_columns)
     out_model(:off) = model(fitted_columns)
+    out_model(prob+3) = 0 ! Ok flag = false
     if (use_photometry) then
         call get_vector(model(abs_mag), vector, L_sednoext, mu_d_noext)
         if ((size(mag_err).ge.2).or.(parallax_known)) then

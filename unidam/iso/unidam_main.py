@@ -462,7 +462,10 @@ class UniDAMTool():
             self.mag[iband] = row['%smag' % band]
             # Storing the inverse uncertainty squared
             # for computational efficiency.
-            self.mag_err[iband] = 1. / (row['e_%smag' % band])**2
+            if row['e_%smag' % band] > 1e3 or row['%smag' % band] < -50:
+                self.mag_err[iband] = np.nan
+            else:
+                self.mag_err[iband] = 1. / (row['e_%smag' % band])**2
         self.Rk = np.array([self.RK[band] for band in self.default_bands.keys()])
         self.abs_mag = np.array(list(self.default_bands.values()), dtype=int)
         # Filter out bad data:

@@ -8,16 +8,14 @@ import simplejson as json
 from astropy.table import Table, Column
 from astropy.io import fits
 from scipy.stats import chi2, norm, truncnorm
-from scipy.ndimage.filters import gaussian_filter1d
+from unidam.iso.histogram_analyzer import HistogramAnalyzer
 from unidam.iso.model_fitter import model_fitter as mf  # pylint: disable=no-member
 from unidam.iso.histogram_splitter import histogram_splitter
-from unidam.utils.fit import find_best_fit
+
 from unidam.utils.mathematics import wstatistics, quantile, bin_estimate, \
-                                     to_borders, move_to_end, move_to_beginning
-from unidam.utils.confidence import find_confidence, ONE_SIGMA, THREE_SIGMA
+    to_borders, move_to_end, move_to_beginning
 from unidam.utils.stats import to_bins, from_bins
 from unidam.utils import constants
-from unidam.utils.local import vargauss_filter1d
 
 
 def ensure_dir(directory):
@@ -33,6 +31,7 @@ class NumpyAwareJSONEncoder(json.JSONEncoder):
     JSON encoder which supports numpy values.
     For debugging output.
     """
+
     def default(self, obj):
         if isinstance(obj, np.ndarray) and obj.ndim == 1:
             return obj.tolist()
@@ -63,7 +62,7 @@ def get_modified_chi2(offset, dof, sum_of_squares):
     random = [truncnorm.rvs(a=offset, b=np.inf, size=10000)]
     for _ in range(dof - 1):
         random.append(norm.rvs(size=10000))
-    chi2_values = np.sum(np.array(random)**2, axis=0)
+    chi2_values = np.sum(np.array(random) ** 2, axis=0)
     return (np.sum(chi2_values < sum_of_squares) * 1e-4)
 
 
@@ -82,19 +81,13 @@ class UniDAMTool():
         'dump_pdf': False,
         'dump_prefix': 'dump',
         'save_sed': False
-        }
+    }
 
     MIN_USPDF_WEIGHT = 0.03
 
     # These special distance-related columns are treated differently
     # by the FORTRAN module.
     SPECIAL = ['distance_modulus', 'extinction', 'distance', 'parallax']
-
-    MINIMUM_STEP = {'age': 0.02,
-                    'distance_modulus': 0.04,
-                    'distance': 100.,
-                    'extinction': 0.001,
-                    'parallax': 0.00}
 
     RK = {band: constants.R_FACTORS[band] / constants.R_FACTORS['K']
           for band in constants.R_FACTORS}
@@ -147,7 +140,7 @@ class UniDAMTool():
                                  'parameter in config')
             self._update_config('parallax', config)
             self._update_config('extinction', config)
-            self.MINIMUM_STEP['distance_modulus'] = 1e-5
+            HistogramAnalyzer.MINIMUM_STEP['distance_modulus'] = 1e-5
         for item in self.SPECIAL:
             # Special columns should appear at the end
             # of fitted_columns list, and in the prescribed order.
@@ -159,7 +152,7 @@ class UniDAMTool():
             self.fitted_columns.insert(0, 'stage')
         else:
             move_to_beginning(self.fitted_columns, 'stage')
-            #raise ValueError('stage column has to be in the list of fitted columns')
+            # raise ValueError('stage column has to be in the list of fitted columns')
         # This is the index of column with output model weights.
         # In the output table (mf.model_data) there are columns for
         # fitted columns + columns for L_iso, L_sed and
@@ -221,8 +214,7 @@ class UniDAMTool():
         print('Opening FITS')
         table = fits.open(filename)
         self.model_data = None
-        if os.path.exists(filename + '.npy'):
-            if os.path.getmtime(filename + '.npy') > os.path.getmtime(filename):
+        if os.path.exists(filename + '.npy') and os.path.getmtime(filename + '.npy') > os.path.getmtime(filename):
                 print('Opening npy')
                 self.model_data = np.load(filename + '.npy')
         if self.model_data is None:
@@ -232,7 +224,6 @@ class UniDAMTool():
             for i in range(len(v[0])):
                 name = v.columns[i].name
                 self.model_data[:, i] = v[name]
-            #self.model_data = np.asarray(table[1].data.tolist(), dtype=float)
             print('Saving...')
             np.save(filename + '.npy', self.model_data)
         self.model_data = np.hstack(
@@ -259,7 +250,7 @@ class UniDAMTool():
         self.abs_mag = self.abs_mag[mask]
         self.Rk = self.Rk[mask]
 
-    def _validate_row(self, row_id):
+    def _validate_star(self, row_id):
         """
         Check if the row is good for processing.
         """
@@ -310,12 +301,11 @@ class UniDAMTool():
             mf.extinction_error = row[self.config['extinction_err']]
 
     def get_fitting_models(self, row):
-        #import ipdb; ipdb.set_trace()
         mask = np.ones(len(self.model_data), dtype=bool)
         for param, param_err, model in zip(self.param, self.param_err,
                                            self.model_columns.values()):
             mask *= np.abs(self.model_data[:, model] - param) \
-                    <= (mf.max_param_err*param_err)
+                    <= (mf.max_param_err * param_err)
         if mask.sum() == 0:
             print('No model fitting for %s' % row[self.id_column])
             return None
@@ -349,10 +339,10 @@ class UniDAMTool():
                             v2 = m2[model]
                             if v2 > v1:
                                 t_current = min(t_current,
-                                                np.abs(param + mf.max_param_err*param_err - v1) / (v2 - v1))
+                                                np.abs(param + mf.max_param_err * param_err - v1) / (v2 - v1))
                             elif v1 > v2:  # If v1 == v2 then t is not updated.
                                 t_current = min(t_current,
-                                                np.abs(param - mf.max_param_err*param_err - v1) / (v1 - v2))
+                                                np.abs(param - mf.max_param_err * param_err - v1) / (v1 - v2))
                     extra_models = m1 + np.linspace(0, t_current, 50)[:, np.newaxis] * (m2 - m1)
                     # This is an extra fix for the stage column.
                     extra_models[:, 0] = m1[0]
@@ -364,7 +354,7 @@ class UniDAMTool():
             model_params = np.atleast_2d(new_models)
             special_params = np.atleast_2d(new_special)
         return model_params[model_params[:, -2] > 0], \
-            special_params[model_params[:, -2] > 0]
+               special_params[model_params[:, -2] > 0]
 
     def get_mode_weights(self, row, model_params):
         stages = np.asarray(model_params[:, 0], dtype=int)
@@ -390,15 +380,15 @@ class UniDAMTool():
             result[stage] = mode_weight[istage]
         return result
 
-    def get_estimates(self, row, dump=False):
+    def process_star(self, row, dump=False):
         """
         Estimate distance and other parameters set in self.fitted_columns.
         """
         # Set maximum differnce between model and observation in units
         # of the observational error.
         self.config['dump'] = dump
-        self.prepare_row(row)
-        validate = self._validate_row(row[self.id_column])
+        self.prepare_star(row)
+        validate = self._validate_star(row[self.id_column])
         if validate is not None:
             return validate
         self._push_to_fortran(row)
@@ -413,11 +403,10 @@ class UniDAMTool():
         stage_weights = self.get_mode_weights(row, model_params)
         # Setting best stage
         result = []
-        stages = stage_weights.keys()
         for part_weight, part_data, part_special in self.data_splitter(
-            stage_weights, model_params, model_special):
-                result.append(self.get_row(part_data, part_special,
-                                           part_weight))
+                stage_weights, model_params, model_special):
+            result.append(self.get_row(part_data, part_special,
+                                       part_weight))
         # Now enumerate USPDF priorities
         weights = [arow['uspdf_weight'] for arow in result]
         for ibest, best in enumerate(np.argsort(weights)[::-1]):
@@ -437,18 +426,17 @@ class UniDAMTool():
 
     def data_splitter(self, stage_weights, model_params, model_special):
         stages = np.asarray(model_params[:, 0], dtype=int)
-        total_mode_weight = np.sum(list(stage_weights.values()))
-        #import ipdb; ipdb.set_trace()
         for stage, mode_weight in stage_weights.items():
             if mode_weight < self.MIN_USPDF_WEIGHT:
                 # Ignore stages with a small weight
                 continue
             stage_data = model_params[stages == stage]
             stage_data = stage_data[stage_data[:, self.w_column] > 0]
+            current_stage_weight = np.sum(stage_data[:, self.w_column])
             # Split stage data into USPDFs
             for part_data in self.split_multimodal(stage_data):
-                part_weight = \
-                    np.sum(part_data[:, self.w_column]) / total_mode_weight
+                part_weight = mode_weight * \
+                              (np.sum(part_data[:, self.w_column]) / current_stage_weight)
                 if part_weight < self.MIN_USPDF_WEIGHT:
                     # ignore USPDF with small weight
                     continue
@@ -456,7 +444,7 @@ class UniDAMTool():
                 part_special = np.in1d(model_special[:, -1], part_model_ids)
                 yield part_weight, part_data, model_special[part_special]
 
-    def prepare_row(self, row):
+    def prepare_star(self, row):
         """
         Prepare magnitudes and spectral parameters
         for a given row.
@@ -468,7 +456,7 @@ class UniDAMTool():
             self.mag[iband] = row['%smag' % band]
             # Storing the inverse uncertainty squared
             # for computational efficiency.
-            self.mag_err[iband] = 1. / (row['e_%smag' % band])**2
+            self.mag_err[iband] = 1. / (row['e_%smag' % band]) ** 2
         self.Rk = np.array([self.RK[band] for band in self.default_bands.keys()])
         self.abs_mag = np.array(list(self.default_bands.values()), dtype=int)
         # Filter out bad data:
@@ -556,215 +544,6 @@ class UniDAMTool():
             for part3 in self.split_other(part, 'age'):
                 yield part3
 
-    def get_bin_count(self, name, mode_data, weights):
-        """
-        Estimate the number of bins needed to represent the data.
-        """
-        m_min = mode_data.min()
-        m_max = mode_data.max()
-        # We use different binning for different parameters.
-        if name == 'mass':
-            # Fixed step in mass, as masses are discrete
-            # for some isochrones.
-            bins = np.arange(m_min * 0.95, m_max * 1.1, 0.06)
-        elif name == 'distance':
-            # Fixed number of bins for distances
-            bins = np.linspace(m_min * 0.95, m_max, 50)
-        elif name == 'age':
-            bins = to_bins(self.age_grid)
-        else:
-            if name == 'extinction':
-                m_min = mode_data[mode_data > 0].min() / 2.
-            bin_size, _ = bin_estimate(mode_data, weights)
-            if name in self.MINIMUM_STEP:
-                bin_size = max(bin_size, self.MINIMUM_STEP[name])
-            if bin_size < np.finfo(np.float32).eps:
-                # In some (very ugly) cases h cannot be properly
-                # determined...
-                bin_count = 3
-            else:
-                bin_count = int((m_max - m_min) / bin_size) + 1
-            bins = np.linspace(m_min, m_max, bin_count)
-        return bins
-
-    def _get_histogram(self, name, mode_data, weights, bins,
-                       smooth):
-        """
-        Prepare a proper histogram for fitting.
-        params:
-            :name: parameter name, only for special treatment of
-                some parameters. E.g. for ages we use pre-defined grid,
-
-            :mode_data:
-        """
-        if name == 'age':
-            # For ages we always use a fixed grid.
-            bin_centers = self.age_grid
-        else:
-            bin_centers = 0.5 * (bins[1:] + bins[:-1])
-        # We need mode_data >= bins[0], otherwise numpy behaves
-        # strangely sometimes.
-        hist = np.histogram(mode_data[mode_data >= bins[0]],
-                            bins,
-                            weights=weights[mode_data >= bins[0]]
-                            )[0]
-        hist = hist / (hist.sum() * (bins[1:] - bins[:-1]))
-        if smooth is not None:
-            if isinstance(smooth, (list, np.ndarray)):
-                smooth = smooth[0]
-            if name in ['distance_modulus', 'extinction']:
-                hist = gaussian_filter1d(
-                    hist,
-                    smooth / (bins[1] - bins[0]),
-                    mode='constant')
-            else:
-                hist = vargauss_filter1d(bin_centers, hist, smooth)
-        return hist, bin_centers
-
-    def _get_histogram_parts(self, name, mode_data, weights, bins,
-                             extinction_data, smooth):
-        """
-        Get the smoothed histogram for the case when parallax is known.
-        In this case we need to distinguish between models with
-        extinctions below and above the input extinction --
-        these sets will need different smoothing.
-        """
-        part1 = mode_data[extinction_data < mf.extinction]
-        weight1 = weights[extinction_data < mf.extinction]
-        bin_centers = from_bins(bins)
-        hist = np.zeros_like(bin_centers)
-        if len(part1) > 0:
-            bin_left = bins.searchsorted(part1.min()) - 1
-            if bin_left < 0:
-                bin_left = 0
-            bin_right = bins.searchsorted(part1.max()) + 1
-            if bin_right - bin_left == 1:
-                hist[bin_left] = weight1.sum()
-            else:
-                xbins = bins[bin_left:bin_right]
-                hist1, _ = \
-                    self._get_histogram(name, part1,
-                                        weight1, xbins,
-                                        smooth[0])
-                hist[bin_left:bin_right - 1] = hist1
-        # And now the second part with a different smoothing
-        part2 = mode_data[extinction_data >= mf.extinction]
-        weight2 = weights[extinction_data >= mf.extinction]
-        if len(part2) > 0:
-            hist2, _ = \
-                self._get_histogram(name, part2,
-                                    weight2, bins, smooth[1])
-            hist += hist2
-        return hist, bin_centers
-
-    def process_mode(self, name, mode_data, weights, smooth=None,
-                     extinction_data=None):
-        """
-        Produce PDF representation for a given value of the mode.
-        """
-        m_min = mode_data.min()
-        m_max = mode_data.max()
-        bin_centers = None
-        if len(mode_data) == 1 or \
-                np.abs(m_min - m_max) < np.finfo(np.float32).eps:
-            mode = mode_data[0]
-            avg = mode_data[0]
-            median = mode_data[0]
-            err = 0.
-            fit, par, kl_div = 'N', [], 1e10
-        else:
-            median = quantile(mode_data, weights)
-            avg, err = wstatistics(mode_data, weights, 2)
-            if smooth is not None:
-                if name in ['distance_modulus', 'extinction']:
-                    err = np.sqrt(err**2 + np.sum(smooth**2))
-                else:
-                    err = np.sqrt(err**2 + np.sum((avg * smooth)**2))
-            if err == 0.:
-                # This is done for the case of very low weights...
-                # I guess it should be done otherwise, but...
-                err = np.std(mode_data)
-            elif err > 0.5 * (m_max - m_min):
-                # This is for the case of very high smoothing values.
-                err = 0.5 * (m_max - m_min)
-            # Get a first guess on the number of bins needed
-            bins = self.get_bin_count(name, mode_data, weights)
-            if len(bins) <= 4 and name != 'age':
-                # This happens sometimes, huh.
-                mode = avg
-                fit, par, kl_div = 'N', [], 1e10
-            else:
-                if name in ['distance_modulus', 'extinction'] and \
-                    len(smooth) == 2:
-                    hist, bin_centers = self._get_histogram_parts(
-                        name, mode_data, weights, bins,
-                        extinction_data, smooth)
-                    avg, err = wstatistics(bin_centers, hist, 2)
-                else:
-                    hist, bin_centers = \
-                        self._get_histogram(name, mode_data,
-                                            weights, bins, smooth)
-                mode = bin_centers[np.argmax(hist)]
-                if np.sum(hist > 0) < 4:
-                    #  Less than 4 non-negative bins, impossible to fit.
-                    mode = avg
-                    fit, par, kl_div = 'N', [], 7e10
-                else:
-                    fit, par, kl_div = find_best_fit(bin_centers, hist,
-                                                     avg, err)
-                    if kl_div > 1e9:
-                        # No fit converged.
-                        fit = 'E'
-        result = {'_mean': avg,
-                  '_err': err,
-                  '_mode': mode,
-                  '_median': median,
-                  '_fit': fit,
-                 }
-        if name == 'extinction':
-            result['_zero'] = 1. - mode_data[mode_data > 0.].shape[0] \
-                / float(mode_data.shape[0])
-        if self.config['dump'] and bin_centers is not None:
-            result.update({'_bins_debug': bin_centers,
-                           '_hist_debug': hist})
-        result_par = np.array(list(par) + [0] * 5)[:5]
-        if fit in 'TL':
-            result_par[2] = mode_data.min()
-            result_par[3] = mode_data.max()
-        elif fit == 'P':
-            result_par[3] = mode_data.min()
-            result_par[4] = mode_data.max()
-        if fit in 'GSTPLF':
-            if fit != 'F':
-                result_par[1] = abs(result_par[1])
-            # Find confidence intervals.
-            sigma1 = to_borders(find_confidence(bin_centers, hist,
-                                                ONE_SIGMA),
-                                mode_data.min(), mode_data.max())
-            sigma3 = to_borders(find_confidence(bin_centers, hist,
-                                                THREE_SIGMA),
-                                mode_data.min(), mode_data.max())
-            result.update({'_low_1sigma': sigma1[0],
-                           '_up_1sigma': sigma1[1],
-                           '_low_3sigma': sigma3[0],
-                           '_up_3sigma': sigma3[1]})
-        else:
-            # If we have no fit, than report just mean and err.
-            result_par = np.array([avg, err, 0., 0., 0.])
-            result.update({'_low_1sigma': result_par[0] - result_par[1],
-                           '_up_1sigma': result_par[0] + result_par[1],
-                           '_low_3sigma': result_par[0] - result_par[1] * 3,
-                           '_up_3sigma': result_par[0] + result_par[1] * 3})
-        result['_par'] = result_par
-        if name in ['extinction', 'distance', 'parallax']:
-            # These values cannot be negative...
-            if result['_low_1sigma'] < 0.:
-                result['_low_1sigma'] = 0.
-            if result['_low_3sigma'] < 0.:
-                result['_low_3sigma'] = 0.
-        return {'%s%s' % (name, key): value
-                for (key, value) in result.items()}
-
     def get_correlations(self, first_parameter, second_parameter, adata):
         """
         Calculate correlations between parameter :name:
@@ -835,7 +614,7 @@ class UniDAMTool():
         sed_dict = {'Predicted': {}, 'PredErr': {},
                     'Observed': {}, 'ObsErr': {}}
         if np.any(adata[:, self.w_column + 1] >= len(mf.models)) or \
-            np.any(adata[:, self.w_column + 1] < 0):
+                np.any(adata[:, self.w_column + 1] < 0):
             print("Cannot do anything for added models...so far")
             return sed_dict
         mdata = mf.models[np.asarray(adata[:, self.w_column + 1] - 1, dtype=int)]
@@ -848,7 +627,7 @@ class UniDAMTool():
                             dm + self.RK[band] * ext,
                             weight, 2)
             sed_dict['Observed'][band] = self.mag[iband]
-            sed_dict['ObsErr'][band] = 1./np.sqrt(self.mag_err[iband])
+            sed_dict['ObsErr'][band] = 1. / np.sqrt(self.mag_err[iband])
         return sed_dict
 
     def get_psed_pbest(self, xdata, dof):
@@ -902,7 +681,7 @@ class UniDAMTool():
             # because L_sed now includes new term for parallax prior
             hess_matrix = np.copy(self.mag_matrix)
             if self.mag_err.size > 1 or abs(mf.parallax) > 0:
-                hess_matrix[0, 0] += 0.212 * mf.parallax**2 / mf.parallax_error**2
+                hess_matrix[0, 0] += 0.212 * mf.parallax ** 2 / mf.parallax_error ** 2
                 # Magic constant 0.212 is (0.2 log(10))**2
                 covariance = np.linalg.inv(hess_matrix)
             else:
@@ -911,7 +690,7 @@ class UniDAMTool():
                 covariance[1][1] = np.sqrt(1. / self.mag_err[0]) / self.Rk[0]
             # For models with extinction > A_0 we need also to modify
             # H_1,1 to account for extinction term in L_sed
-            hess_matrix[1, 1] += 1./mf.extinction_error ** 2
+            hess_matrix[1, 1] += 1. / mf.extinction_error ** 2
             covariance2 = np.linalg.inv(hess_matrix)
             smooth_distance = [np.sqrt(covariance[0, 0]),
                                np.sqrt(covariance2[0, 0])]
@@ -925,10 +704,10 @@ class UniDAMTool():
         new_result = {'stage': xdata[0, 0],
                       'uspdf_points': xdata.shape[0],
                       'uspdf_weight': xweight,
-                     }
+                      }
         new_result.update(self.get_psed_pbest(xdata, dof))
         if (self.config['dump'] or self.config['save_sed']) and \
-            self.mag.size > 0:
+                self.mag.size > 0:
             sed = self.dump_sed(xdata)
             if self.config['dump']:
                 new_result['sed_debug'] = sed
@@ -956,11 +735,14 @@ class UniDAMTool():
                 smooth = 0.2 * np.log(10.) * smooth_distance[0]
             else:
                 smooth = None
-            new_result.update(self.process_mode(key,
-                                                xdata[:, ikey],
-                                                xdata[:, self.w_column],
-                                                smooth,
-                                                extinction_if_needed))
+            histogram = HistogramAnalyzer(key,
+                                          xdata[:, ikey],
+                                          xdata[:, self.w_column],
+                                          smooth,
+                                          extinction_if_needed,
+                                          self.config['dump'])
+            histogram.age_grid = self.age_grid
+            new_result.update(histogram.process_mode())
         if self.config['dump_pdf'] and 'age' in self.fitted_columns:
             self.add_to_pdf(xdata, new_result['uspdf_weight'])
         if len(xdata) > 3 and 'distance_modulus' in self.fitted_columns:
@@ -1043,7 +825,6 @@ class UniDAMTool():
                 del rrow[key]
         return result
 
-
     def get_table(self, data, idtype=str):
         """
         Prepare output table object.
@@ -1083,7 +864,7 @@ class UniDAMTool():
         for key in self.fitted_columns.keys():
             if key in ['stage']:
                 continue
-            if key in units:
+            elif key in units:
                 unit = units[key]
                 meta = ucd[key]
             else:

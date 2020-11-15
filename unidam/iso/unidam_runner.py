@@ -105,7 +105,7 @@ if args.parallel:
         for xrow in patch:
             try:
                 with Timer() as exec_time:
-                    result = des.get_estimates(xrow, dump=False)
+                    result = des.process_star(xrow, dump=False)
             except:
                 # Put all exception text into an exception and raise that
                 raise Exception(str(xrow['id']) + "\n" + "".join(traceback.format_exception(*sys.exc_info())))
@@ -154,7 +154,7 @@ else:
         #with warnings.catch_warnings():
         #    warnings.filterwarnings("error")
         with Timer() as exec_time:
-            result = de.get_estimates(xrow, dump=args.dump_results)
+            result = de.process_star(xrow, dump=args.dump_results)
         if result is None:
             continue
         elif isinstance(result, dict):

@@ -1,14 +1,8 @@
-from __future__ import division
-from __future__ import unicode_literals
-from __future__ import print_function
-from __future__ import absolute_import
-
-from future import standard_library
-standard_library.install_aliases()
 import warnings
 import numpy as np
 from scipy.stats import norm, truncnorm
 from scipy.optimize import curve_fit
+from unidam.utils.extra_functions import unidam_extra_functions as uef
 try:
     import skewnorm_boost
     def skew_gauss(x, mu, sigma, alpha):
@@ -33,6 +27,7 @@ except ImportError:
                                   ) for xx in x])
         return result
 
+skew_gauss = uef.skew_normal_pdf_arr
 try:
     import studentst_boost
 
@@ -54,7 +49,7 @@ except ImportError:
     def t_student(x, mu, sigma, degrees_of_freedom):
         result = t.pdf(x, np.abs(degrees_of_freedom), mu, np.abs(sigma))
         return result / (result.sum() * (x[1] - x[0]))
-
+t_student = uef.student_pdf
 
 def trunc_line(xin, val, val2, lower, upper):
     """
@@ -297,7 +292,8 @@ def find_best_fit(xdata, ydata, mu0, sigma0, return_all=False):
         """
         Proxy for truncated Gaussian.
         """
-        return truncate_gauss(x, p[0], p[1], lower, upper)
+        return uef.trunc_normal(x, p[0], p[1], lower, upper)
+
     xxdata, yydata = pad_x_and_y(xdata, ydata, 10)
     # Empirical first estimate for the Student's parameter:
     nu0 = np.min([np.power(sigma0, -0.7), 1])

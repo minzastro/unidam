@@ -1,10 +1,3 @@
-from __future__ import division
-from __future__ import unicode_literals
-from __future__ import print_function
-from __future__ import absolute_import
-from builtins import range
-from future import standard_library
-standard_library.install_aliases()
 import numpy as np
 
 
@@ -36,7 +29,6 @@ def min_count_bins(data, min_step, min_count, minimum=None, maximum=None):
     if maximum is None:
         maximum = data.max()
     bins = np.concatenate((np.arange(minimum, maximum, min_step), [maximum]))
-    result = []
     histogram, _ = np.histogram(data, bins)
     sub_sum = 0
     result = [bins[0]]

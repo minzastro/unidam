@@ -8,9 +8,9 @@ import simplejson as json
 from astropy.table import Table, Column
 from astropy.io import fits
 from scipy.stats import chi2, norm, truncnorm
-from unidam.iso.histogram_analyzer import HistogramAnalyzer
-from unidam.iso.model_fitter import model_fitter as mf  # pylint: disable=no-member
-from unidam.iso.histogram_splitter import histogram_splitter
+from unidam.core.histogram_analyzer import HistogramAnalyzer
+from unidam.core.model_fitter import model_fitter as mf  # pylint: disable=no-member
+from unidam.core.histogram_splitter import histogram_splitter
 
 from unidam.utils.mathematics import wstatistics, quantile, bin_estimate, \
     to_borders, move_to_end, move_to_beginning
@@ -63,7 +63,7 @@ def get_modified_chi2(offset, dof, sum_of_squares):
     for _ in range(dof - 1):
         random.append(norm.rvs(size=10000))
     chi2_values = np.sum(np.array(random) ** 2, axis=0)
-    return (np.sum(chi2_values < sum_of_squares) * 1e-4)
+    return np.sum(chi2_values < sum_of_squares) * 1e-4
 
 
 class UniDAMTool():
@@ -105,8 +105,7 @@ class UniDAMTool():
         self.param_err = None
         self.id_column = None
         self.model_column_names = None
-        self.config = {}
-        self.config['dump'] = False
+        self.config = {'dump': False}
         config = ConfigParser()
         config.optionxform = str
         if config_filename is None:
@@ -308,7 +307,7 @@ class UniDAMTool():
                     <= (mf.max_param_err * param_err)
         if mask.sum() == 0:
             print('No model fitting for %s' % row[self.id_column])
-            return None
+            return None, None
         xsize = len(self.fitted_columns) + 4
         model_params = np.zeros((mask.sum(), xsize))
         special_params = np.zeros((mask.sum(), 5))
@@ -321,6 +320,7 @@ class UniDAMTool():
                 model_params[i, -1] = i
         if 0 < (model_params[:, -2] > 0).sum() < 50:
             print('Adding more models for %s' % row[self.id_column])
+            max_id = model_params.max() + 1
             # Add intermediate models
             ind = np.arange(len(self.model_data), dtype=int)[mask][model_params[:, -2] > 0]
             new_models = []
@@ -353,6 +353,8 @@ class UniDAMTool():
                             new_special.append(res[2])
             model_params = np.atleast_2d(new_models)
             special_params = np.atleast_2d(new_special)
+            model_params[:, -1] = np.arange(len(model_params))
+            special_params[:, -1] = np.arange(len(model_params))
         return model_params[model_params[:, -2] > 0], \
                special_params[model_params[:, -2] > 0]
 
@@ -397,7 +399,7 @@ class UniDAMTool():
                     'error': 'Parallax is too negative'}
         # HERE THINGS HAPPEN!
         model_params, model_special = self.get_fitting_models(row)
-        if model_params is None:
+        if model_params is None or len(model_params) == 0:
             return {'id': row[self.id_column],
                     'error': 'No model fitting'}
         stage_weights = self.get_mode_weights(row, model_params)
@@ -520,7 +522,7 @@ class UniDAMTool():
         else:
             step, _ = bin_estimate(stage_data[:, split_column],
                                    stage_data[:, self.w_column])
-            step = max(step, self.MINIMUM_STEP[param])
+            step = max(step, HistogramAnalyzer.MINIMUM_STEP[param])
             xbins = np.arange(stage_data[:, split_column].min() - step * 0.5,
                               stage_data[:, split_column].max() + step * 1.5, step)
             max_order = 4
@@ -661,21 +663,6 @@ class UniDAMTool():
         Prepare output row for the selection of models.
         """
         dof = len(self.mag)
-        if self.mag_err.size == 0:
-            covariance = None
-            smooth_distance = 0
-            smooth_extinction = 0
-        elif self.mag_err.size > 1:
-            # Calculating smoothing parameters from the inverse
-            # Hessian matrix
-            covariance = np.linalg.inv(self.mag_matrix)
-            smooth_distance = np.sqrt(covariance[0, 0])
-            smooth_extinction = np.sqrt(covariance[1, 1])
-        else:
-            # Only one magnitude - calculate smoothing
-            # from magnitude uncertainties directly
-            smooth_distance = np.sqrt(1. / self.mag_err[0])
-            smooth_extinction = np.sqrt(1. / self.mag_err[0]) / self.Rk[0]
         if mf.parallax_known and self.mag.size > 0:
             # If the parallax is known, we have to modify the Hessian,
             # because L_sed now includes new term for parallax prior
@@ -699,6 +686,21 @@ class UniDAMTool():
             # ...and we have two more degrees of freedom
             # (extinction and parallax)
             dof += 2
+        elif self.mag_err.size == 0:
+            smooth_distance = 0
+            smooth_extinction = 0
+        elif self.mag_err.size > 1:
+            # Calculating smoothing parameters from the inverse
+            # Hessian matrix
+            covariance = np.linalg.inv(self.mag_matrix)
+            smooth_distance = np.sqrt(covariance[0, 0])
+            smooth_extinction = np.sqrt(covariance[1, 1])
+        else:
+            # Only one magnitude - calculate smoothing
+            # from magnitude uncertainties directly
+            smooth_distance = np.sqrt(1. / self.mag_err[0])
+            smooth_extinction = np.sqrt(1. / self.mag_err[0]) / self.Rk[0]
+
         smooth_distance = np.atleast_1d(smooth_distance)
         smooth_extinction = np.atleast_1d(smooth_extinction)
         new_result = {'stage': xdata[0, 0],
@@ -760,7 +762,7 @@ class UniDAMTool():
     @classmethod
     def assign_quality(cls, results):
         """
-        Qulity flag assignment:
+        Quality flag assignment:
         1 - Single mode;
         A - best mode has power of 0.9 or more;
         B - 1st and 2nd best modes together have power of 0.9 or more;
@@ -875,7 +877,7 @@ class UniDAMTool():
                 final['%s%s' % (key, suffix)] = float_column(unit=unit)
             final['%s_mean' % key].meta['ucd'] = meta
             final['%s_fit' % key] = Column(dtype='S1')
-            final['%s_par' % key] = Column(dtype=float, shape=(5))
+            final['%s_par' % key] = Column(dtype=float, shape=5)
         if 'distance_modulus' in self.fitted_columns:
             for key in ['dm_age', 'age_dm', 'dm_mass']:
                 final['%s_slope' % key] = float_column()

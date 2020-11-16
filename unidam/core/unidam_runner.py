@@ -20,8 +20,8 @@ import sys
 import traceback
 import warnings
 from astropy.table import Table, Column
-from unidam.iso.model_fitter import model_fitter as mf
-from unidam.iso.unidam_main import UniDAMTool
+from unidam.core.model_fitter import model_fitter as mf
+from unidam.core.unidam_main import UniDAMTool
 from unidam.utils.constants import AGE_RANGE
 from unidam.utils.timer import Timer
 

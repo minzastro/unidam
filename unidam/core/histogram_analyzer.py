@@ -1,5 +1,5 @@
 import numpy as np
-from unidam.iso.model_fitter import model_fitter as mf  # pylint: disable=no-member
+from unidam.core.model_fitter import model_fitter as mf  # pylint: disable=no-member
 from unidam.utils.local import vargauss_filter1d
 from scipy.ndimage.filters import gaussian_filter1d
 from unidam.utils.stats import from_bins, to_bins
@@ -89,7 +89,7 @@ class HistogramAnalyzer():
                 hist = vargauss_filter1d(bin_centers, hist, smooth)
         return hist, bin_centers
 
-    def _update_err(self, err, avg):
+    def _update_err(self, err, avg, bin_step):
         if self.smooth is not None:
             if self.name in ['distance_modulus', 'extinction']:
                 err = np.sqrt(err ** 2 + np.sum(self.smooth ** 2))
@@ -98,10 +98,12 @@ class HistogramAnalyzer():
         if err == 0.:
             # This is done for the case of very low weights...
             # I guess it should be done otherwise, but...
-            err = np.std(self.mode_data)
+            err = max(np.std(self.mode_data), bin_step * 0.2)
         elif err > 0.5 * (self.m_max - self.m_min):
             # This is for the case of very high smoothing values.
             err = 0.5 * (self.m_max - self.m_min)
+        elif err < bin_step * 0.2:
+            err = bin_step * 0.2
         return err
 
 
@@ -150,11 +152,11 @@ class HistogramAnalyzer():
             err = 0.
             fit, par, kl_div = 'N', [], 1e10
         else:
-            median = quantile(self.mode_data, self.weights)
-            avg, err = wstatistics(self.mode_data, self.weights, 2)
-            err = self._update_err(err, avg)
             # Get a first guess on the number of bins needed
             bins = self.get_bin_count()
+            median = quantile(self.mode_data, self.weights)
+            avg, err = wstatistics(self.mode_data, self.weights, 2)
+            err = self._update_err(err, avg, bins[1] - bins[0])
             if len(bins) <= 4 and self.name != 'age':
                 # This happens sometimes, huh.
                 mode = avg
@@ -165,7 +167,8 @@ class HistogramAnalyzer():
                     hist, bin_centers = self._get_histogram_parts(bins)
                     avg, err = wstatistics(bin_centers, hist, 2)
                 else:
-                    hist, bin_centers = self._get_histogram(bins, self.mode_data, self.weights, self.smooth)
+                    hist, bin_centers = self._get_histogram(bins, self.mode_data,
+                                                            self.weights, self.smooth)
                 mode = bin_centers[np.argmax(hist)]
                 if np.sum(hist > 0) < 4:
                     #  Less than 4 non-negative bins, impossible to fit.

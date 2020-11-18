@@ -3,7 +3,9 @@ import numpy as np
 from scipy.stats import norm
 from scipy.optimize import curve_fit
 from unidam.utils.extra_functions import unidam_extra_functions as uef
+import warnings
 
+warnings.filterwarnings("ignore", category=np.RankWarning)
 skew_gauss = uef.skew_normal_pdf_arr
 
 

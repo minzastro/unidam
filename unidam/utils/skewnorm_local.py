@@ -1,18 +1,5 @@
 """An implementation of the skew-t and skew-normal distributions for SciPy"""
-from __future__ import division
-from __future__ import unicode_literals
-from __future__ import print_function
-from __future__ import absolute_import
 
-# TODO: Implement skew-t
-
-# Copyright (c) 2012 Oliver M. Haynold
-# All rights reserved.
-
-from builtins import range
-from builtins import int
-from future import standard_library
-standard_library.install_aliases()
 import math
 import numpy as np
 from scipy.stats import norm, rv_continuous, chi2

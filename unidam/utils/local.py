@@ -1,11 +1,14 @@
-from __future__ import division, unicode_literals, print_function, \
-    absolute_import
-from future import standard_library
-standard_library.install_aliases()
 import numpy as np
 from scipy.stats import norm, truncnorm
-#from unidam.skewnorm_boosted import skewnorm_boosted as skewnorm
-#from unidam.studentst_boosted import studentst_boosted as studentst
+from unidam.utils.extra_functions import unidam_extra_functions as uef
+skew_gauss = uef.skew_normal_pdf_arr
+class studentst():
+    @classmethod
+    def pdf(cls, x, mu, sigma, degrees_of_freedom):
+           result = uef.student_pdf(x, np.abs(degrees_of_freedom), mu, np.abs(sigma))
+           return result / (result.sum() * (x[1] - x[0]))
+
+
 try:
     from unidam.skewnorm_boosted import skewnorm_boosted as skewnorm
 except ImportError:
@@ -14,13 +17,6 @@ except ImportError:
     # which is considerably slower.
     from unidam.utils.skewnorm_local import skewnorm_local as skewnorm
 
-try:
-    from unidam.studentst_boosted import studentst_boosted as studentst
-except ImportError:
-    # No studentst_boost library available.
-    # A local python-based version will be used,
-    # which is considerably slower.
-    from scipy.stats import t as studentst
 
 from unidam.utils.trunc_revexpon import trunc_revexpon
 from unidam.utils.trunc_line import TruncLine
@@ -58,7 +54,7 @@ def get_param(fit, par):
         beta = (par[3] - par[0]) / par[1]
         return truncnorm, [alpha, beta, par[0], sigma]
     elif fit == 'P':
-        return studentst, par
+        return studentst, par[:-2]
     elif fit == 'L':
         sigma = np.abs(par[1])
         if par[0] < par[2]:
@@ -80,7 +76,6 @@ def get_ydata(name, row, binx):
     if row['%s_fit' % name] in 'GSTPLF':
         func, par = get_param(row['%s_fit' % name], row['%s_par' % name])
         print(row['%s_fit' % name], func, par)
-        import ipdb; ipdb.set_trace()
         ydata = func.pdf(binx, *par)
         if np.any(ydata) < 0:
             print(name, ydata)

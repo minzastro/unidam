@@ -134,7 +134,7 @@ class HistogramAnalyzer():
                 # determined...
                 bin_count = 3
             else:
-                bin_count = int((self.m_max - m_min) / bin_size) + 1
+                bin_count = max(int((self.m_max - m_min) / bin_size) + 1, 3)
             bins = np.linspace(m_min, self.m_max, bin_count)
         return bins
 

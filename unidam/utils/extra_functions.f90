@@ -111,9 +111,11 @@ subroutine student_pdf ( n, x, a, b, c, y)
 
   xx = ( x - a ) / b
 
-  y = gamma ( 0.5D+00 * ( c + 1.0D+00 ) ) / ( sqrt ( r8_pi * c ) &
-    * gamma ( 0.5D+00 * c ) &
-    * ( 1.0D+00 + xx * xx / c ) ** ( 0.5 * c + 0.5D+00 ) ) 
+  y = exp( log_gamma( 0.5D+00 * ( c + 1.0D+00 ) ) - 0.5 * log( r8_pi * c ) &
+      - log_gamma(0.5 * c) - ( 0.5 * c + 0.5D+00 ) * log( 1.0D+00 + xx * xx / c ))
+  !y = gamma ( 0.5D+00 * ( c + 1.0D+00 ) ) / ( sqrt ( r8_pi * c ) &
+  !  * gamma ( 0.5D+00 * c ) &
+  !  * ( 1.0D+00 + xx * xx / c ) ** ( 0.5 * c + 0.5D+00 ) ) 
 end
 
 subroutine normal_01_cdf ( x, cdf )

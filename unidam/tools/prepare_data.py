@@ -138,6 +138,57 @@ for column in ['T', 'feh', 'logg', 'delta_nu', 'nu_max']:
 
 has_matches = config.get('prematched', default=[])
 need_matches = config.get('needmatch', default=['2MASS', 'AllWISE', 'Gaia'])
+
+def update_Gaia(data):
+    data['parallax'] *= 1e-3
+    data['parallax_error'] *= 1e-3
+    return data
+
+def update_UKIDSS(data):
+    for band in ['y', 'j_1', 'h', 'k']:
+        data['%sAperMag3' % band][data['%sAperMag3' % band] > 1e10] = np.nan
+        data['%sAperMag3Err' % band][data['%sAperMag3Err' % band] > 1e10] = np.nan
+        data['%sAperMag3Err' % band][data['%sAperMag3Err' % band] < 1e-5] = np.nan
+        data['%sAperMag3Err' % band] = np.sqrt(data['%sAperMag3Err' % band]**2 + 4e-4)
+        data.rename_column('%sAperMag3' % band, 'UKIDSS%smag' % band.upper()[0])
+        data.rename_column('%sAperMag3Err' % band, 'e_UKIDSS%smag' % band.upper()[0])
+    return data
+
+XMATCH_PARAMS = {
+    '2MASS': {'catalog': 'vizier:II/246/out',
+              'update': None,
+              'remove_columns': ['angDist',
+                         'errHalfMaj', 'errHalfMin', 'errPosAng',
+                         'X', 'MeasureJD']},
+    'LAS': {'catalog': 'vizier:II/319/las9',
+              'update': update_UKIDSS,
+              'remove_columns': ['mode', 'epoch', 'mergedClass']},
+    'AllWISE': {'catalog': 'vizier:II/328/allwise',
+                'update': None,
+                'remove_columns': ['angDist',
+                         'eeMaj', 'eeMin', 'eePA',
+                         'W3mag', 'W4mag',
+                         'e_W3mag', 'e_W4mag',
+                         'pmRA', 'e_pmRA', 'pmDE', 'e_pmDE', 'ID', 'd2M'] +
+                ['%smag_2' % b for b in 'JHK'] + ['e_%smag_2' % b for b in 'JHK']
+                },
+    'Gaia': {'catalog': 'vizier:I/345/gaia2',
+             'update': update_Gaia,
+             'remove_columns': ['ra_epoch2000', 'dec_epoch2000',
+                         'errHalfMaj', 'errHalfMin', 'errPosAng',
+                         'ra_error', 'dec_error',
+                         'pmra', 'pmra_error', 'pmdec', 'pmdec_error',
+                         'duplicated_source', 'phot_g_mean_flux',
+                         'phot_g_mean_flux_error', 'phot_g_mean_mag',
+                         'phot_bp_mean_flux', 'phot_bp_mean_flux_error',
+                         'phot_bp_mean_mag', 'phot_rp_mean_flux',
+                         'phot_rp_mean_flux_error', 'phot_rp_mean_mag',
+                         'bp_rp', 'radial_velocity', 'radial_velocity_error',
+                         'rv_nb_transits', 'teff_val', 'a_g_val',
+                         'e_bp_min_rp_val', 'radius_val', 'lum_val']
+             }
+}
+
 if '2MASS' in has_matches and 'Jmag' in data.colnames:
     keep.extend(['Jmag', 'e_Jmag', 'Hmag', 'e_Hmag',
                  'Kmag', 'e_Kmag', 'Qfl'])
@@ -156,7 +207,8 @@ for colname in keep:
 data.keep_columns(set(keep))
 
 def clean(table):
-    for column in ['RAJ2000_2', 'DEJ2000_2', 'l_2', 'b_2']:
+    for column in ['RAJ2000_2', 'DEJ2000_2', 'ra_2', 'dec_2', 'angDist_2',
+                   'l_2', 'b_2']:
         if column in table.colnames:
             table.remove_column(column)
 
@@ -170,61 +222,76 @@ if 'extinction' not in config['mapping'] or \
 
     data = astropy_join(data, extinction_data, keys=('pix'), join_type='left')
 
-if '2MASS' not in has_matches and '2MASS' in need_matches:
-    print('XMatching with 2MASS')
-    data = XMatch.query(cat1=data,
-                        cat2='vizier:II/246/out',
-                        max_distance=3 * u.arcsec,
-                        colRA1=ra, colDec1=dec,
-                        responseformat='votable',
-                        selection='best')
-    data.remove_columns(['angDist',
-                         'errHalfMaj', 'errHalfMin', 'errPosAng',
-                         'X', 'MeasureJD'])
-    clean(data)
 
-if 'AllWISE' not in has_matches and 'AllWISE' in need_matches:
-    print('XMatching with AllWISE')
-    data = XMatch.query(cat1=data,
-                        cat2='vizier:II/328/allwise',
-                        max_distance=3 * u.arcsec,
-                        colRA1=ra, colDec1=dec,
-                        responseformat='votable',
-                        selection='best')
-    bad_col = ['%smag_2' % b for b in 'JHK'] + ['e_%smag_2' % b for b in 'JHK']
-    clean(data)
-    data.remove_columns(['angDist',
-                         'eeMaj', 'eeMin', 'eePA',
-                         'W3mag', 'W4mag',
-                         'e_W3mag', 'e_W4mag',
-                         'pmRA', 'e_pmRA', 'pmDE', 'e_pmDE', 'ID', 'd2M'] +
-                        bad_col)
 
-# TODO: make this an option.
-if 'Gaia' not in has_matches and 'Gaia' in need_matches:
-    print('XMatching with Gaia')
-    data = XMatch.query(cat1=data,
-                        cat2='vizier:I/345/gaia2',
-                        max_distance=3 * u.arcsec,
-                        colRA1=ra, colDec1=dec,
-                        #colRA2='RA_ICRS', colDec2='DE_ICRS',
-                        responseformat='votable',
-                        selection='best')
-    data.remove_columns(['ra_epoch2000', 'dec_epoch2000',
-                         'errHalfMaj', 'errHalfMin', 'errPosAng',
-                         'ra', 'ra_error', 'dec', 'dec_error',
-                         'pmra', 'pmra_error', 'pmdec', 'pmdec_error',
-                         'duplicated_source', 'phot_g_mean_flux',
-                         'phot_g_mean_flux_error', 'phot_g_mean_mag',
-                         'phot_bp_mean_flux', 'phot_bp_mean_flux_error',
-                         'phot_bp_mean_mag', 'phot_rp_mean_flux',
-                         'phot_rp_mean_flux_error', 'phot_rp_mean_mag',
-                         'bp_rp', 'radial_velocity', 'radial_velocity_error',
-                         'rv_nb_transits', 'teff_val', 'a_g_val',
-                         'e_bp_min_rp_val', 'radius_val', 'lum_val'])
-    clean(data)
-    data['parallax'] *= 1e-3
-    data['parallax_error'] *= 1e-3
+for key, config in XMATCH_PARAMS.items():
+    if key not in has_matches and key in need_matches:
+        print('XMatching with %s' % key)
+        data = XMatch.query(cat1=data,
+                            cat2=config['catalog'],
+                            max_distance=3 * u.arcsec,
+                            colRA1=ra, colDec1=dec,
+                            responseformat='votable',
+                            selection='best')
+        data.remove_columns(config['remove_columns'])
+        clean(data)
+        if config['update']:
+            data = config['update'](data)
+#
+# if '2MASS' not in has_matches and '2MASS' in need_matches:
+#     print('XMatching with 2MASS')
+#     data = XMatch.query(cat1=data,
+#                         cat2='vizier:II/246/out',
+#                         max_distance=3 * u.arcsec,
+#                         colRA1=ra, colDec1=dec,
+#                         responseformat='votable',
+#                         selection='best')
+#     data.remove_columns(['angDist',
+#                          'errHalfMaj', 'errHalfMin', 'errPosAng',
+#                          'X', 'MeasureJD'])
+#     clean(data)
+#
+# if 'AllWISE' not in has_matches and 'AllWISE' in need_matches:
+#     print('XMatching with AllWISE')
+#     data = XMatch.query(cat1=data,
+#                         cat2='vizier:II/328/allwise',
+#                         max_distance=3 * u.arcsec,
+#                         colRA1=ra, colDec1=dec,
+#                         responseformat='votable',
+#                         selection='best')
+#     bad_col = ['%smag_2' % b for b in 'JHK'] + ['e_%smag_2' % b for b in 'JHK']
+#     clean(data)
+#     data.remove_columns(['angDist',
+#                          'eeMaj', 'eeMin', 'eePA',
+#                          'W3mag', 'W4mag',
+#                          'e_W3mag', 'e_W4mag',
+#                          'pmRA', 'e_pmRA', 'pmDE', 'e_pmDE', 'ID', 'd2M'] +
+#                         bad_col)
+#
+# # TODO: make this an option.
+# if 'Gaia' not in has_matches and 'Gaia' in need_matches:
+#     print('XMatching with Gaia')
+#     data = XMatch.query(cat1=data,
+#                         cat2='vizier:I/345/gaia2',
+#                         max_distance=3 * u.arcsec,
+#                         colRA1=ra, colDec1=dec,
+#                         responseformat='votable',
+#                         selection='best')
+#     data.remove_columns(['ra_epoch2000', 'dec_epoch2000',
+#                          'errHalfMaj', 'errHalfMin', 'errPosAng',
+#                          'ra', 'ra_error', 'dec', 'dec_error',
+#                          'pmra', 'pmra_error', 'pmdec', 'pmdec_error',
+#                          'duplicated_source', 'phot_g_mean_flux',
+#                          'phot_g_mean_flux_error', 'phot_g_mean_mag',
+#                          'phot_bp_mean_flux', 'phot_bp_mean_flux_error',
+#                          'phot_bp_mean_mag', 'phot_rp_mean_flux',
+#                          'phot_rp_mean_flux_error', 'phot_rp_mean_mag',
+#                          'bp_rp', 'radial_velocity', 'radial_velocity_error',
+#                          'rv_nb_transits', 'teff_val', 'a_g_val',
+#                          'e_bp_min_rp_val', 'radius_val', 'lum_val'])
+#     clean(data)
+#     data['parallax'] *= 1e-3
+#     data['parallax_error'] *= 1e-3
 if 'parallax_zeropoint' in config and 'parallax' in data.colnames:
     data['parallax'] -= float(config['parallax_zeropoint']) * 1e-3
 if args.force and os.path.exists(args.output):

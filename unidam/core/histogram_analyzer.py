@@ -7,6 +7,8 @@ from unidam.utils.confidence import find_confidence, ONE_SIGMA, THREE_SIGMA
 from unidam.utils.mathematics import wstatistics, quantile, bin_estimate, \
     to_borders
 from unidam.utils.fit import find_best_fit
+import warnings
+from scipy.optimize import OptimizeWarning
 
 class HistogramAnalyzer():
     MINIMUM_STEP = {'age': 0.02,
@@ -115,10 +117,12 @@ class HistogramAnalyzer():
         if self.name == 'mass':
             # Fixed step in mass, as masses are discrete
             # for some isochrones.
-            bins = np.arange(self.m_min * 0.95, self.m_max * 1.1, 0.06)
+            bins = np.arange(self.m_min * 0.95,
+                             max(self.m_max * 1.1, self.m_min * 0.95 + 0.13), 0.06)
         elif self.name == 'distance':
             # Fixed number of bins for distances
-            bins = np.linspace(self.m_min * 0.95, self.m_max, 50)
+            bins = np.linspace(self.m_min * 0.95,
+                               max(self.m_max, self.m_min * 0.95 + 150), 50)
         elif self.name == 'age':
             bins = to_bins(self.age_grid)
         else:
@@ -175,8 +179,10 @@ class HistogramAnalyzer():
                     mode = avg
                     fit, par, kl_div = 'N', [], 7e10
                 else:
-                    fit, par, kl_div = find_best_fit(bin_centers, hist,
-                                                     avg, err)
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings("ignore",  category=OptimizeWarning)
+                        fit, par, kl_div = find_best_fit(bin_centers, hist,
+                                                         avg, err)
                     if kl_div > 1e9:
                         # No fit converged.
                         fit = 'E'

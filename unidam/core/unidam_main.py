@@ -458,7 +458,11 @@ class UniDAMTool():
             self.mag[iband] = row['%smag' % band]
             # Storing the inverse uncertainty squared
             # for computational efficiency.
-            self.mag_err[iband] = 1. / (row['e_%smag' % band]) ** 2
+            if self.mag[iband] > 50 or row['e_%smag' % band] > 50  or row['e_%smag' % band] < 1e-4:
+                self.mag[iband] = np.nan
+                self.mag_err[iband] = np.nan
+            else:
+                self.mag_err[iband] = 1. / (row['e_%smag' % band]) ** 2
         self.Rk = np.array([self.RK[band] for band in self.default_bands.keys()])
         self.abs_mag = np.array(list(self.default_bands.values()), dtype=int)
         # Filter out bad data:
@@ -737,6 +741,7 @@ class UniDAMTool():
                 smooth = 0.2 * np.log(10.) * smooth_distance[0]
             else:
                 smooth = None
+
             histogram = HistogramAnalyzer(key,
                                           xdata[:, ikey],
                                           xdata[:, self.w_column],

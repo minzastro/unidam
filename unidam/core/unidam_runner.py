@@ -122,9 +122,9 @@ if args.parallel:
                 tbl.add_row(new_row)
         return tbl, des, bad
 
-    pool = mp.Pool(pool_size)
-    pool_result = pool.map(run_single, np.array_split(data, pool_size))
-    pool_result, des, bads = list(zip(*pool_result))
+    with mp.Pool(processes=pool_size) as pool:
+        pool_result = pool.map(run_single, np.array_split(data, pool_size))
+        pool_result, des, bads = list(zip(*pool_result))
     final = vstack(pool_result)
     unfitted = vstack(bads)
     if de.config['dump_pdf']:
@@ -151,8 +151,6 @@ else:
     i = 0
     for xrow in data:
         print(xrow[de.id_column])
-        #with warnings.catch_warnings():
-        #    warnings.filterwarnings("error")
         with Timer() as exec_time:
             result = de.process_star(xrow, dump=args.dump_results)
         if result is None:

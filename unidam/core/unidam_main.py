@@ -16,7 +16,7 @@ from unidam.utils.mathematics import wstatistics, quantile, bin_estimate, \
     to_borders, move_to_end, move_to_beginning
 from unidam.utils.stats import to_bins, from_bins
 from unidam.utils import constants
-
+from unidam.utils.log import get_logger
 
 def ensure_dir(directory):
     """
@@ -95,6 +95,8 @@ class UniDAMTool():
           for band in constants.R_FACTORS}
 
     def __init__(self, config_filename=None, config_override=None):
+        self.logger = get_logger("UniDAM", True, '')
+        self.logger.info("Started")
         self.mag = None
         self.mag_matrix = None
         self.mag_err = None
@@ -210,20 +212,20 @@ class UniDAMTool():
         """
         if not os.path.exists(filename):
             raise Exception('Model file %s is not found' % filename)
-        print('Opening FITS')
+        self.logger.info('Opening FITS')
         table = fits.open(filename)
         self.model_data = None
         if os.path.exists(filename + '.npy') and os.path.getmtime(filename + '.npy') > os.path.getmtime(filename):
-                print('Opening npy')
+                self.logger.info('Opening npy')
                 self.model_data = np.load(filename + '.npy')
         if self.model_data is None:
-            print('Converting data to nparray')
+            self.logger.info('Converting data to nparray')
             v = table[1].data
             self.model_data = np.empty((v.shape[0], len(v[0])))
             for i in range(len(v[0])):
                 name = v.columns[i].name
                 self.model_data[:, i] = v[name]
-            print('Saving...')
+            self.logger.info('Saving...')
             np.save(filename + '.npy', self.model_data)
         self.model_data = np.hstack(
             (self.model_data[:, :-1],
@@ -235,9 +237,9 @@ class UniDAMTool():
         self.model_columns = self._names_to_indices(self.model_columns, validate=True)
         self.default_bands = self._names_to_indices(self.default_bands)
         self.mag_names = np.array(list(self.default_bands.keys()), dtype=str)
-        print('Pass to F90')
+        self.logger.info('Pass to F90')
         mf.alloc_models(self.model_data)
-        print('Ready')
+        self.logger.info('Ready')
 
     def _apply_mask(self, mask):
         """
@@ -254,15 +256,15 @@ class UniDAMTool():
         Check if the row is good for processing.
         """
         if np.isnan(self.param).any():
-            print(('No spectral params for %s' % row_id))
+            self.logger.warn('No spectral params for %s' % row_id)
             return {'id': row_id,
                     'error': 'No spectral params'}
         if np.any(self.param < -100.) or np.any(self.param_err <= 0):
-            print(('No spectral params or invalid params for %s' % row_id))
+            self.logger.warn('No spectral params or invalid params for %s' % row_id)
             return {'id': row_id,
                     'error': 'No spectral params or invalid params'}
         if self.mag.size == 0 and mf.use_photometry:
-            print(('No photometry for a %s' % row_id))
+            self.logger.warn('No photometry for a %s' % row_id)
             return {'id': row_id,
                     'error': 'No photometry'}
         return None
@@ -306,7 +308,7 @@ class UniDAMTool():
             mask *= np.abs(self.model_data[:, model] - param) \
                     <= (mf.max_param_err * param_err)
         if mask.sum() == 0:
-            print('No model fitting for %s' % row[self.id_column])
+            self.logger.warn('No model fitting for %s' % row[self.id_column])
             return None, None
         xsize = len(self.fitted_columns) + 4
         model_params = np.zeros((mask.sum(), xsize))
@@ -319,7 +321,7 @@ class UniDAMTool():
             else:
                 model_params[i, -1] = i
         if 0 < (model_params[:, -2] > 0).sum() < 50:
-            print('Adding more models for %s' % row[self.id_column])
+            self.logger.info('Adding more models for %s' % row[self.id_column])
             max_id = model_params.max() + 1
             # Add intermediate models
             ind = np.arange(len(self.model_data), dtype=int)[mask][model_params[:, -2] > 0]
@@ -368,13 +370,13 @@ class UniDAMTool():
         total_mode_weight = np.sum(mode_weight)
         if total_mode_weight == 0.:
             # Does this ever work?
-            print(('No model fitting (test) for %s' % row[self.id_column]))
+            self.logger.warn('No model fitting (test) for %s' % row[self.id_column])
             return {'id': row[self.id_column],
                     'error': 'No model fitting'}
         try:
             mode_weight = mode_weight / total_mode_weight
         except ZeroDivisionError:
-            print(('Zero weight for %s' % row[self.id_column]))
+            self.logger.warn('Zero weight for %s' % row[self.id_column])
             return {'id': row[self.id_column],
                     'error': 'Zero weight'}
         result = {}
@@ -621,7 +623,7 @@ class UniDAMTool():
                     'Observed': {}, 'ObsErr': {}}
         if np.any(adata[:, self.w_column + 1] >= len(mf.models)) or \
                 np.any(adata[:, self.w_column + 1] < 0):
-            print("Cannot do anything for added models...so far")
+            self.logger.warn("Cannot do anything for added models...so far")
             return sed_dict
         mdata = mf.models[np.asarray(adata[:, self.w_column + 1] - 1, dtype=int)]
         dm = adata[:, list(self.fitted_columns.keys()).index('distance_modulus')]

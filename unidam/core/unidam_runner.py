@@ -24,7 +24,9 @@ from unidam.core.model_fitter import model_fitter as mf
 from unidam.core.unidam_main import UniDAMTool
 from unidam.utils.constants import AGE_RANGE
 from unidam.utils.timer import Timer
+from unidam.utils.log import get_logger
 
+logger = get_logger("UniDAM_runner", True, '')
 np.set_printoptions(linewidth=200)
 parser = argparse.ArgumentParser(description="""
 Tool to estimate distances to stars.
@@ -110,7 +112,7 @@ if args.parallel:
                 # Put all exception text into an exception and raise that
                 raise Exception(str(xrow['id']) + "\n" + "".join(traceback.format_exception(*sys.exc_info())))
             if result is None:
-                print(xrow['id'])
+                logger.debug(xrow['id'])
                 continue
             elif isinstance(result, dict):
                 bad.add_row(result)
@@ -145,12 +147,12 @@ else:
         mf.debug = args.dump_results
     else:
         if args.dump_results:
-            print("Warning, dumping of results is allowed only if ID list"
-                  " is provided. Disabling result dumps")
+            logger.warn("Warning, dumping of results is allowed only if ID list"
+                        " is provided. Disabling result dumps")
         mf.debug = False
     i = 0
     for xrow in data:
-        print(xrow[de.id_column])
+        logger.debug(xrow[de.id_column])
         with Timer() as exec_time:
             result = de.process_star(xrow, dump=args.dump_results)
         if result is None:
@@ -161,7 +163,7 @@ else:
         for new_row in result:
             for k in list(new_row.keys()):
                 if k not in final.colnames:
-                    print('%s not in columns' % k)
+                    logger.warn('%s not in columns' % k)
             if args.time:
                 new_row['exec_time'] = exec_time.interval
                 new_row['pid'] = os.getpid()
@@ -172,11 +174,13 @@ else:
         np.savetxt('%s_age_pdf.dat' % output_prefix,
                    np.vstack((AGE_RANGE, de.total_age_pdf)).T)
         np.savetxt('%s_2d_pdf.dat' % output_prefix, de.total_2d_pdf)
-if os.path.exists(args.output):
-    os.remove(args.output)
-final.meta = vars(args)
-unfitted.meta = vars(args)
-final.write(args.output)
-if os.path.exists('%s_unfitted.fits' % args.output):
-    os.remove('%s_unfitted.fits' % args.output)
-unfitted.write('%s_unfitted.fits' % args.output)
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    if os.path.exists(args.output):
+        os.remove(args.output)
+    final.meta = vars(args)
+    unfitted.meta = vars(args)
+    final.write(args.output)
+    if os.path.exists('%s_unfitted.fits' % args.output):
+        os.remove('%s_unfitted.fits' % args.output)
+    unfitted.write('%s_unfitted.fits' % args.output)

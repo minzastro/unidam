@@ -7,19 +7,15 @@ Created on Tue Apr 11 16:37:34 2017
 
 Some useful constants.
 """
-from __future__ import unicode_literals
-from __future__ import print_function
-from __future__ import division
-from __future__ import absolute_import
-from future import standard_library
-standard_library.install_aliases()
 from numpy import arange
 # Extinctions references:
 # JHK (2MASS), W1-W2 (AllWISE), ugriz (SDSS): Yuan et al. 2013
 # GaiaDR2 from PARSEC
 # UBVRI: Cardelli, Clayton and Mathis 1989
 R_FACTORS = {'J': 0.72, 'H': 0.46, 'K': 0.306, # 2MASS
-             'UKIDSSJ': 0.28887 * 3.1, # UKIDSS
+             'UKIDSSZ': 0.49965 * 3.1, 'UKIDSSY': 0.38547 * 3.1,
+             'UKIDSSJ': 0.28887	* 3.1, 'UKIDSSH': 0.18353	* 3.1,
+             'UKIDSSK': 0.11509 * 3.1,
              'W1': 0.18, 'W2': 0.16, # AllWISE
              'u': 4.39, 'g': 3.30, 'r': 2.31, 'i': 1.71, 'z': 1.29, # SDSS
              'G': 0.86209 * 3.1, 'G_BP': 1.072 * 3.1, 'G_RP': 0.64648 * 3.1, # Gaia2 Weiler 2018

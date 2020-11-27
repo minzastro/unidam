@@ -20,8 +20,8 @@ import sys
 import traceback
 import warnings
 from astropy.table import Table, Column
-from unidam.iso.model_fitter import model_fitter as mf
-from unidam.iso.unidam_main import UniDAMTool
+from unidam.core.model_fitter import model_fitter as mf
+from unidam.core.unidam_main import UniDAMTool
 from unidam.utils.constants import AGE_RANGE
 from unidam.utils.timer import Timer
 
@@ -105,7 +105,7 @@ if args.parallel:
         for xrow in patch:
             try:
                 with Timer() as exec_time:
-                    result = des.get_estimates(xrow, dump=False)
+                    result = des.process_star(xrow, dump=False)
             except:
                 # Put all exception text into an exception and raise that
                 raise Exception(str(xrow['id']) + "\n" + "".join(traceback.format_exception(*sys.exc_info())))
@@ -122,9 +122,9 @@ if args.parallel:
                 tbl.add_row(new_row)
         return tbl, des, bad
 
-    pool = mp.Pool(pool_size)
-    pool_result = pool.map(run_single, np.array_split(data, pool_size))
-    pool_result, des, bads = list(zip(*pool_result))
+    with mp.Pool(processes=pool_size) as pool:
+        pool_result = pool.map(run_single, np.array_split(data, pool_size))
+        pool_result, des, bads = list(zip(*pool_result))
     final = vstack(pool_result)
     unfitted = vstack(bads)
     if de.config['dump_pdf']:
@@ -151,10 +151,8 @@ else:
     i = 0
     for xrow in data:
         print(xrow[de.id_column])
-        #with warnings.catch_warnings():
-        #    warnings.filterwarnings("error")
         with Timer() as exec_time:
-            result = de.get_estimates(xrow, dump=args.dump_results)
+            result = de.process_star(xrow, dump=args.dump_results)
         if result is None:
             continue
         elif isinstance(result, dict):

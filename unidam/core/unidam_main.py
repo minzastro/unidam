@@ -884,7 +884,7 @@ class UniDAMTool():
                 final['%s%s' % (key, suffix)] = float_column(unit=unit)
             final['%s_mean' % key].meta['ucd'] = meta
             final['%s_fit' % key] = Column(dtype='S1')
-            final['%s_par' % key] = Column(dtype=float, shape=5)
+            final['%s_par' % key] = Column(dtype=float, shape=(5, ))
         if 'distance_modulus' in self.fitted_columns:
             for key in ['dm_age', 'age_dm', 'dm_mass']:
                 final['%s_slope' % key] = float_column()

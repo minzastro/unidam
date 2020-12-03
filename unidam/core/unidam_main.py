@@ -673,7 +673,7 @@ class UniDAMTool():
             # If the parallax is known, we have to modify the Hessian,
             # because L_sed now includes new term for parallax prior
             hess_matrix = np.copy(self.mag_matrix)
-            if self.mag_err.size > 1 or abs(mf.parallax) > 0:
+            if self.mag_err.size > 1 or abs(mf.parallax) > 1e-6:
                 hess_matrix[0, 0] += 0.212 * mf.parallax ** 2 / mf.parallax_error ** 2
                 # Magic constant 0.212 is (0.2 log(10))**2
                 covariance = np.linalg.inv(hess_matrix)

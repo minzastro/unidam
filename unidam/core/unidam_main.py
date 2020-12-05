@@ -313,7 +313,12 @@ class UniDAMTool():
         xsize = len(self.fitted_columns) + 4
         model_params = np.zeros((mask.sum(), xsize))
         special_params = np.zeros((mask.sum(), 5))
-        for i, model in enumerate(self.model_data[mask]):
+        if mask.sum() < 100000:
+            model_sample = self.model_data[mask]
+        else:
+            reduction_factor = int(mask.sum() / 100000) + 1
+            model_sample = self.model_data[mask][::reduction_factor]
+        for i, model in enumerate(model_sample):
             success, model_params[i], special_params[i] = \
                 mf.process_model(i, model, xsize)
             if not success:

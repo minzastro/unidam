@@ -358,6 +358,9 @@ class UniDAMTool():
                         if res[0] > 0:
                             new_models.append(res[1])
                             new_special.append(res[2])
+            if len(new_models) == 0:
+                self.logger.warn('No model fitting for %s' % row[self.id_column])
+                return None, None
             model_params = np.atleast_2d(new_models)
             special_params = np.atleast_2d(new_special)
             model_params[:, -1] = np.arange(len(model_params))

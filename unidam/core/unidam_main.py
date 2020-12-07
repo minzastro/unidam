@@ -13,10 +13,15 @@ from unidam.core.model_fitter import model_fitter as mf  # pylint: disable=no-me
 from unidam.core.histogram_splitter import histogram_splitter
 
 from unidam.utils.mathematics import wstatistics, quantile, bin_estimate, \
-    to_borders, move_to_end, move_to_beginning
-from unidam.utils.stats import to_bins, from_bins
+    move_to_end, move_to_beginning
+from unidam.utils.stats import to_bins
 from unidam.utils import constants
-from unidam.utils.log import get_logger
+import sys
+
+if sys.version_info.minor <= 7:
+    from unidam.utils.dummy_log import  get_logger
+else:
+    from unidam.utils.log import get_logger
 
 def ensure_dir(directory):
     """

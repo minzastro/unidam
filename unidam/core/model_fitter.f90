@@ -176,7 +176,7 @@ subroutine solve_for_distance_with_parallax(vector, solution)
         INTEGER, INTENT(IN)      :: n
         REAL, INTENT(IN)    :: x(n)
         REAL, INTENT(OUT)   :: fvec(n)
-        INTEGER, INTENT(IN OUT)  :: iflag
+        INTEGER, INTENT(INOUT)  :: iflag
         real extra, pi
           pi = 1./mu_d_to_distance(x(1))
           if (X(2) .ge. extinction) then
@@ -231,6 +231,31 @@ real function mu_d_to_distance(mu)
   real, intent(in) :: mu
     mu_d_to_distance = 10**(mu*0.2 + 1)
 end function mu_d_to_distance
+
+subroutine process_model_set(in_size, model_ids, out_size, out_models, special_models)
+  integer, intent(in) :: in_size
+  real, intent(in) :: model_ids(in_size)
+  integer, intent(in) :: out_size
+  
+  real, intent(out) :: out_models(in_size, out_size)
+  real, intent(out) :: special_models(in_size, 5)
+  real current_model(model_column_count)
+  real current_out(out_size)
+  real current_special(5)
+  integer i
+  logical success
+  do i = 1, in_size
+     current_model = models(model_ids(i), :)
+     call process_model(i, current_model, out_size, success, current_out, current_special)
+     out_models(i, :) = current_out
+     special_models(i, :) = current_special
+     if (.not.success) then
+         special_models(i, :4) = 0
+         out_models(i, :) = 0
+         special_models(i, 5) = -1
+     endif
+  enddo
+end subroutine process_model_set
 
 subroutine process_model(model_id, model, out_size, success, out_model, special_model)
   integer, intent(in) :: model_id

@@ -316,20 +316,13 @@ class UniDAMTool():
             self.logger.warn('No model fitting for %s' % row[self.id_column])
             return None, None
         xsize = len(self.fitted_columns) + 4
-        model_params = np.zeros((mask.sum(), xsize))
-        special_params = np.zeros((mask.sum(), 5))
-        if mask.sum() < 100000:
-            model_sample = self.model_data[mask]
-        else:
+        indices = np.arange(len(mask), dtype=int)[mask]
+
+        if mask.sum() > 100000:
             reduction_factor = int(mask.sum() / 100000) + 1
-            model_sample = self.model_data[mask][::reduction_factor]
-        for i, model in enumerate(model_sample):
-            success, model_params[i], special_params[i] = \
-                mf.process_model(i, model, xsize)
-            if not success:
-                model_params[i, -2] = 0.
-            else:
-                model_params[i, -1] = i
+            indices = indices[::reduction_factor]
+
+        model_params, special_params = mf.process_model_set(indices, xsize)
         if 0 < (model_params[:, -2] > 0).sum() < 50:
             self.logger.info('Adding more models for %s' % row[self.id_column])
             max_id = model_params.max() + 1

@@ -327,7 +327,7 @@ class UniDAMTool():
             self.logger.info('Adding more models for %s' % row[self.id_column])
             max_id = model_params.max() + 1
             # Add intermediate models
-            ind = np.arange(len(self.model_data), dtype=int)[mask][model_params[:, -2] > 0]
+            ind = np.arange(len(self.model_data), dtype=int)[indices][model_params[:, -2] > 0]
             new_models = []
             new_special = []
             for ii in ind:

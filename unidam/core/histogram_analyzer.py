@@ -88,6 +88,9 @@ class HistogramAnalyzer():
                     smooth / (bins[1] - bins[0]),
                     mode='constant')
             else:
+                # For distance and parallax we use variable-width smoothing,
+                # because sigma is constant in distance modulus units,
+                # not distance.
                 hist = vargauss_filter1d(bin_centers, hist, smooth)
         return hist, bin_centers
 
@@ -101,9 +104,9 @@ class HistogramAnalyzer():
             # This is done for the case of very low weights...
             # I guess it should be done otherwise, but...
             err = max(np.std(self.mode_data), bin_step * 0.2)
-        elif err > 0.5 * (self.m_max - self.m_min):
-            # This is for the case of very high smoothing values.
-            err = 0.5 * (self.m_max - self.m_min)
+        #elif err > 0.5 * (self.m_max - self.m_min):
+        #    # This is for the case of very high smoothing values.
+        #    err = 0.5 * (self.m_max - self.m_min)
         elif err < bin_step * 0.2:
             err = bin_step * 0.2
         return err

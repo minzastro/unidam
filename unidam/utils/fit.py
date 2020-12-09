@@ -257,7 +257,6 @@ def find_best_fit(xdata, ydata, mu0, sigma0, return_all=False):
     """
     lower = xdata[0] - 0.5 * (xdata[1] - xdata[0])
     upper = xdata[-1] + 0.5 * (xdata[1] - xdata[0])
-
     def tgauss(x, *p):
         """
         Proxy for truncated Gaussian.

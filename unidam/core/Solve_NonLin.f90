@@ -17,8 +17,8 @@ SUBROUTINE hbrd(fcn, n, x, fvec, epsfcn, tol, info, diag)
 ! Date: 2003-07-15  Time: 13:27:42
 
 INTEGER, INTENT(IN)        :: n
-REAL, INTENT(IN OUT)  :: x(n)
-REAL, INTENT(IN OUT)  :: fvec(n)
+REAL, INTENT(INOUT)  :: x(n)
+REAL, INTENT(INOUT)  :: fvec(n)
 REAL, INTENT(IN)      :: epsfcn
 REAL, INTENT(IN)      :: tol
 INTEGER, INTENT(OUT)       :: info
@@ -31,7 +31,7 @@ INTERFACE
     INTEGER, INTENT(IN)      :: n
     REAL, INTENT(IN)    :: x(n)
     REAL, INTENT(OUT)   :: fvec(n)
-    INTEGER, INTENT(IN OUT)  :: iflag
+    INTEGER, INTENT(INOUT)  :: iflag
   END SUBROUTINE FCN
 END INTERFACE
 
@@ -153,17 +153,17 @@ SUBROUTINE hybrd(fcn, n, x, fvec, xtol, maxfev, ml, mu, epsfcn, diag, mode,  &
                  factor, nprint, info, nfev)
 
 INTEGER, INTENT(IN)        :: n
-REAL, INTENT(IN OUT)  :: x(n)
-REAL, INTENT(IN OUT)  :: fvec(n)
+REAL, INTENT(INOUT)  :: x(n)
+REAL, INTENT(INOUT)  :: fvec(n)
 REAL, INTENT(IN)      :: xtol
-INTEGER, INTENT(IN OUT)    :: maxfev
-INTEGER, INTENT(IN OUT)    :: ml
+INTEGER, INTENT(INOUT)    :: maxfev
+INTEGER, INTENT(INOUT)    :: ml
 INTEGER, INTENT(IN)        :: mu
 REAL, INTENT(IN)      :: epsfcn
 REAL, INTENT(OUT)     :: diag(n)
 INTEGER, INTENT(IN)        :: mode
 REAL, INTENT(IN)      :: factor
-INTEGER, INTENT(IN OUT)    :: nprint
+INTEGER, INTENT(INOUT)    :: nprint
 INTEGER, INTENT(OUT)       :: info
 INTEGER, INTENT(OUT)       :: nfev
 
@@ -174,7 +174,7 @@ INTERFACE
     INTEGER, INTENT(IN)      :: n
     REAL, INTENT(IN)    :: x(n)
     REAL, INTENT(OUT)   :: fvec(n)
-    INTEGER, INTENT(IN OUT)  :: iflag
+    INTEGER, INTENT(INOUT)  :: iflag
   END SUBROUTINE FCN
 END INTERFACE
 
@@ -622,7 +622,7 @@ REAL, INTENT(IN)      :: r(lr)
 REAL, INTENT(IN)      :: diag(n)
 REAL, INTENT(IN)      :: qtb(n)
 REAL, INTENT(IN)      :: delta
-REAL, INTENT(IN OUT)  :: x(n)
+REAL, INTENT(INOUT)  :: x(n)
 REAL, INTENT(OUT)     :: wa1(n)
 REAL, INTENT(OUT)     :: wa2(n)
 
@@ -800,15 +800,15 @@ SUBROUTINE fdjac1(fcn, n, x, fvec, fjac, ldfjac, iflag, ml, mu, epsfcn,   &
                   wa1, wa2)
 
 INTEGER, INTENT(IN)        :: n
-REAL, INTENT(IN OUT)  :: x(n)
+REAL, INTENT(INOUT)  :: x(n)
 REAL, INTENT(IN)      :: fvec(n)
 INTEGER, INTENT(IN)        :: ldfjac
 REAL, INTENT(OUT)     :: fjac(ldfjac,n)
-INTEGER, INTENT(IN OUT)    :: iflag
+INTEGER, INTENT(INOUT)    :: iflag
 INTEGER, INTENT(IN)        :: ml
 INTEGER, INTENT(IN)        :: mu
 REAL, INTENT(IN)      :: epsfcn
-REAL, INTENT(IN OUT)  :: wa1(n)
+REAL, INTENT(INOUT)  :: wa1(n)
 REAL, INTENT(OUT)     :: wa2(n)
 
 ! EXTERNAL fcn
@@ -818,7 +818,7 @@ INTERFACE
     INTEGER, INTENT(IN)      :: n
     REAL, INTENT(IN)    :: x(n)
     REAL, INTENT(OUT)   :: fvec(n)
-    INTEGER, INTENT(IN OUT)  :: iflag
+    INTEGER, INTENT(INOUT)  :: iflag
   END SUBROUTINE FCN
 END INTERFACE
 
@@ -1068,7 +1068,7 @@ SUBROUTINE qrfac(m, n, a, lda, pivot, ipvt, lipvt, rdiag, acnorm, wa)
 INTEGER, INTENT(IN)        :: m
 INTEGER, INTENT(IN)        :: n
 INTEGER, INTENT(IN)        :: lda
-REAL, INTENT(IN OUT)  :: a(lda,n)
+REAL, INTENT(INOUT)  :: a(lda,n)
 LOGICAL, INTENT(IN)        :: pivot
 INTEGER, INTENT(IN)        :: lipvt
 INTEGER, INTENT(OUT)       :: ipvt(lipvt)
@@ -1241,7 +1241,7 @@ SUBROUTINE r1mpyq(m, n, a, lda, v, w)
 INTEGER, INTENT(IN)        :: m
 INTEGER, INTENT(IN)        :: n
 INTEGER, INTENT(IN)        :: lda
-REAL, INTENT(IN OUT)  :: a(lda,n)
+REAL, INTENT(INOUT)  :: a(lda,n)
 REAL, INTENT(IN)      :: v(n)
 REAL, INTENT(IN)      :: w(n)
 
@@ -1339,9 +1339,9 @@ SUBROUTINE r1updt(m, n, s, ls, u, v, w, sing)
 INTEGER, INTENT(IN)        :: m
 INTEGER, INTENT(IN)        :: n
 INTEGER, INTENT(IN)        :: ls
-REAL, INTENT(IN OUT)  :: s(ls)
+REAL, INTENT(INOUT)  :: s(ls)
 REAL, INTENT(IN)      :: u(m)
-REAL, INTENT(IN OUT)  :: v(n)
+REAL, INTENT(INOUT)  :: v(n)
 REAL, INTENT(OUT)     :: w(m)
 LOGICAL, INTENT(OUT)       :: sing
 

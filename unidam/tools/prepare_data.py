@@ -131,7 +131,14 @@ for column in ['T', 'feh', 'logg', 'delta_nu', 'nu_max']:
         keep.append(column)
 
 has_matches = config.get('prematched', default=[])
+if type(has_matches) == str:
+    need_matches = [has_matches]
+
 need_matches = config.get('needmatch', default=['2MASS', 'AllWISE', 'Gaia'])
+if type(need_matches) == str:
+    need_matches = [need_matches]
+print('Has matches: %s' % has_matches)
+print('Need matches: %s' % need_matches)
 
 def update_Gaia(data):
     data['parallax'] *= 1e-3
@@ -180,7 +187,26 @@ XMATCH_PARAMS = {
                          'bp_rp', 'radial_velocity', 'radial_velocity_error',
                          'rv_nb_transits', 'teff_val', 'a_g_val',
                          'e_bp_min_rp_val', 'radius_val', 'lum_val']
-             }
+             },
+    'GaiaEDR3': {'catalog': 'vizier:I/350/gaiaedr3',
+             'update': update_Gaia,
+             'remove_columns': ["errHalfMaj", "errHalfMin", "errPosAng", "ra_error", "dec_error",
+                                "parallax_over_error", "pm", "pmra", "pmra_error", "pmdec",
+                                "pmdec_error", "astrometric_n_good_obs_al", "astrometric_gof_al",
+                                "astrometric_chi2_al", "astrometric_excess_noise", "astrometric_excess_noise_sig",
+                                "astrometric_params_solved", "pseudocolour", "pseudocolour_error",
+                                "visibility_periods_used",
+                                "duplicated_source", "phot_g_mean_flux", "phot_g_mean_flux_error",
+                                "phot_bp_mean_flux", "phot_bp_mean_flux_error", "phot_bp_mean_mag",
+                                "phot_rp_mean_flux",
+                                "phot_rp_mean_mag", "bp_rp", "dr2_radial_velocity", "dr2_radial_velocity_error",
+                                "dr2_rv_nb_transits", "dr2_rv_template_teff",
+                                "dr2_rv_template_logg", "panstarrs1", "sdssdr13", "skymapper2", "urat1",
+                                "phot_g_mean_mag_error", "phot_bp_mean_mag_error",
+                                "phot_rp_mean_mag_error", "phot_g_mean_mag_corrected",
+                                "phot_g_mean_mag_error_corrected",
+                                "phot_g_mean_flux_corrected", "angDist"]
+                 }
 }
 
 if '2MASS' in has_matches and 'Jmag' in data.colnames:
@@ -189,7 +215,7 @@ if '2MASS' in has_matches and 'Jmag' in data.colnames:
 if 'AllWISE' in has_matches and 'W1mag' in data.colnames:
     keep.extend(['W1mag', 'e_W1mag', 'W2mag', 'e_W2mag',
                  'ccf', 'qph'])
-if 'Gaia' in has_matches:
+if 'Gaia' in has_matches or 'GaiaEDR3' in has_matches:
     keep.extend(['parallax', 'parallax_error'])
     if np.nanmax(data['parallax_error']) > 1e-2:
         data['parallax'] *= 1e-3
@@ -218,19 +244,19 @@ if 'extinction' not in config['mapping'] or \
 
 
 
-for key, config in XMATCH_PARAMS.items():
+for key, xm_config in XMATCH_PARAMS.items():
     if key not in has_matches and key in need_matches:
         print('XMatching with %s' % key)
         data = XMatch.query(cat1=data,
-                            cat2=config['catalog'],
+                            cat2=xm_config['catalog'],
                             max_distance=3 * u.arcsec,
                             colRA1=ra, colDec1=dec,
                             responseformat='votable',
                             selection='best')
-        data.remove_columns(config['remove_columns'])
+        data.remove_columns(xm_config['remove_columns'])
         clean(data)
-        if config['update']:
-            data = config['update'](data)
+        if xm_config['update']:
+            data = xm_config['update'](data)
 #
 # if '2MASS' not in has_matches and '2MASS' in need_matches:
 #     print('XMatching with 2MASS')

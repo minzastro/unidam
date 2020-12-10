@@ -8,15 +8,11 @@ class studentst():
            result = uef.student_pdf(x, np.abs(degrees_of_freedom), mu, np.abs(sigma))
            return result / (result.sum() * (x[1] - x[0]))
 
-
-try:
-    from unidam.skewnorm_boosted import skewnorm_boosted as skewnorm
-except ImportError:
-    # No skewnorm_boost library available.
-    # A local python-based version will be used,
-    # which is considerably slower.
-    from unidam.utils.skewnorm_local import skewnorm_local as skewnorm
-
+class skewnorm():
+    @classmethod
+    def pdf(cls, x, mu, sigma, skew):
+        result = uef.skew_normal_pdf_arr(x, mu, sigma, skew)
+        return result
 
 from unidam.utils.trunc_revexpon import trunc_revexpon
 from unidam.utils.trunc_line import TruncLine
@@ -43,7 +39,7 @@ def get_param(fit, par):
       L: truncated Laplacian (exponent) distribution.
     """
     if fit == 'S':
-        return skewnorm, [par[2], par[0], par[1]]
+        return skewnorm, par[:3]
     elif fit == 'F':
         return TruncLine, par[:4]
     elif fit == 'G':

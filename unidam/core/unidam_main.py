@@ -3,6 +3,7 @@ import os
 import warnings
 from collections import OrderedDict
 from configparser import ConfigParser
+from os.path import getmtime
 import numpy as np
 import simplejson as json
 from astropy.table import Table, Column
@@ -19,7 +20,7 @@ from unidam.utils import constants
 import sys
 
 if sys.version_info.minor <= 7:
-    from unidam.utils.dummy_log import  get_logger
+    from unidam.utils.dummy_log import get_logger
 else:
     from unidam.utils.log import get_logger
 
@@ -131,6 +132,9 @@ class UniDAMTool():
         for key, value in self.DEFAULTS.items():
             if not config.has_option('general', key):
                 config.set('general', key, str(value))
+        for section_name, section in config.items():
+            for key, value in section.items():
+                self.config[key] = str(value)[:60 - len(key)]
         self.keep_columns = get_splitted(config, 'keep_columns')
         self.fitted_columns = get_splitted(config, 'fitted_columns')
         # This array contains indices in the model table for input data
@@ -158,7 +162,6 @@ class UniDAMTool():
             self.fitted_columns.insert(0, 'stage')
         else:
             move_to_beginning(self.fitted_columns, 'stage')
-            # raise ValueError('stage column has to be in the list of fitted columns')
         # This is the index of column with output model weights.
         # In the output table (mf.model_data) there are columns for
         # fitted columns + columns for L_iso, L_sed and
@@ -220,9 +223,10 @@ class UniDAMTool():
         self.logger.info('Opening FITS')
         table = fits.open(filename)
         self.model_data = None
-        if os.path.exists(filename + '.npy') and os.path.getmtime(filename + '.npy') > os.path.getmtime(filename):
-                self.logger.info('Opening npy')
-                self.model_data = np.load(filename + '.npy')
+        if (os.path.exists(filename + '.npy') and
+                getmtime(filename + '.npy') > getmtime(filename)):
+            self.logger.info('Opening npy')
+            self.model_data = np.load(filename + '.npy')
         if self.model_data is None:
             self.logger.info('Converting data to nparray')
             v = table[1].data
@@ -292,7 +296,7 @@ class UniDAMTool():
         else:
             mf.matrix_det = 0.  # Will be unsused anyway
         if self.mag.size > 0:
-            mf.alloc_mag(self.mag, self.mag_err, self.Rk)
+            mf.alloc_mag(self.mag, self.mag_err, self.z)
         if len(self.param) > 0:
             mf.alloc_param(self.param, self.param_err)
         # Collect model-file column indices of fitted columns
@@ -313,7 +317,7 @@ class UniDAMTool():
             mask *= np.abs(self.model_data[:, model] - param) \
                     <= (mf.max_param_err * param_err)
         if mask.sum() == 0:
-            self.logger.warn('No model fitting for %s' % row[self.id_column])
+            self.logger.info('No model fitting for %s' % row[self.id_column])
             return None, None
         xsize = len(self.fitted_columns) + 4
         indices = np.arange(len(mask), dtype=int)[mask]
@@ -363,6 +367,9 @@ class UniDAMTool():
             special_params = np.atleast_2d(new_special)
             model_params[:, -1] = np.arange(len(model_params))
             special_params[:, -1] = np.arange(len(model_params))
+        elif (model_params[:, -2] > 0).sum() <= 0:
+            self.logger.info('No model fitting for %s' % row[self.id_column])
+            return None, None
         return model_params[model_params[:, -2] > 0], \
                special_params[model_params[:, -2] > 0]
 
@@ -466,7 +473,9 @@ class UniDAMTool():
             self.mag[iband] = row['%smag' % band]
             # Storing the inverse uncertainty squared
             # for computational efficiency.
-            if np.abs(self.mag[iband]) > 50 or row['e_%smag' % band] > 50  or row['e_%smag' % band] < 1e-4:
+            if (np.abs(self.mag[iband]) > 50 or
+                row['e_%smag' % band] > 50 or
+                    row['e_%smag' % band] < 1e-4):
                 self.mag[iband] = np.nan
                 self.mag_err[iband] = np.nan
             else:
@@ -536,7 +545,8 @@ class UniDAMTool():
                                    stage_data[:, self.w_column])
             step = max(step, HistogramAnalyzer.MINIMUM_STEP[param])
             xbins = np.arange(stage_data[:, split_column].min() - step * 0.5,
-                              stage_data[:, split_column].max() + step * 1.5, step)
+                              stage_data[:, split_column].max() + step * 1.5,
+                              step)
             max_order = 4
         histogram = np.histogram(stage_data[:, split_column],
                                  bins=xbins,

@@ -3,6 +3,7 @@ import numpy as np
 from scipy.stats import norm
 from scipy.optimize import curve_fit
 from unidam.utils.extra_functions import unidam_extra_functions as uef
+from unidam.utils.mathematics import kl_divergence
 import warnings
 
 warnings.filterwarnings("ignore", category=np.RankWarning)
@@ -108,33 +109,6 @@ def gauss(x, mu, sigma):
     """
     return norm.pdf(x, loc=mu, scale=sigma)
 
-
-def kl_divergence(x, func, par, y):
-    """
-    Symmetric Kullback-Leibler divergence value.
-    """
-    values = func(x, *par)
-    mask = np.logical_and(y > 1e-50, values > 1e-50)
-    if np.any(mask) and mask.sum() > 2:
-        return (np.sum(values[mask] * np.log(values[mask] / y[mask])) +
-                np.sum(y[mask] * np.log(y[mask] / values[mask]))) / mask.sum()
-    else:
-        return 2e10
-
-
-def akaike(x, func, par, y):
-    """
-    Akaike information criteria.
-    """
-    values = func(x, *par)
-    mask = np.logical_and(values > 1e-50, y > 0)
-    if np.any(mask) and mask.sum() > 2:
-        k = len(par)
-        aic = 2. * k - np.log(np.sum((y - values) ** 2))
-        aic_c = aic + 2. * k * (k + 1) / (len(y) - k - 1)
-        return aic_c
-    else:
-        return 2e10
 
 
 def do_fit_exponent(xdata, ydata, p0, lower, upper):

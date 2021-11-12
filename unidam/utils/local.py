@@ -71,7 +71,7 @@ def get_ydata(name, row, binx):
     """
     if row['%s_fit' % name] in 'GSTPLF':
         func, par = get_param(row['%s_fit' % name], row['%s_par' % name])
-        print(row['%s_fit' % name], func, par)
+        #print(row['%s_fit' % name], func, par)
         ydata = func.pdf(binx, *par)
         if np.any(ydata) < 0:
             print(name, ydata)

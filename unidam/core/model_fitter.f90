@@ -36,11 +36,11 @@ real, allocatable :: mag(:)
 real, allocatable :: mag_err(:)
 !> Extinction coefficiens (see eq 8 in Paper 1)
 real, allocatable :: Ck(:)
-!> Indices of absolute magnitude columns in models array 
+!> Indices of absolute magnitude columns in models array
 integer, allocatable :: abs_mag(:)
-!> Indices of "observed" columns in models array (default: T, logg, feh) 
+!> Indices of "observed" columns in models array (default: T, logg, feh)
 integer, allocatable :: model_columns(:)
-!> Indices of columns for derived values in models array 
+!> Indices of columns for derived values in models array
 integer, allocatable :: fitted_columns(:)
 !> Number of columns in the models array
 integer, save :: model_column_count
@@ -190,7 +190,7 @@ subroutine solve_for_distance_with_parallax(vector, solution)
           if (distance_prior.eq.1) then
             FVEC(1) = FVEC(1) + 0.4 * log(10.)
           else if (distance_prior.eq.2) then
-            FVEC(1) = FVEC(1) + 0.2 * log(10.) * (2. - 1./(pi * prior_parameter)) 
+            FVEC(1) = FVEC(1) + 0.2 * log(10.) * (2. - 1./(pi * prior_parameter))
           endif
           FVEC(2) = -vector(2) + sum(Ck * Ck * X(2) * mag_err) + &
             sum(Ck * X(1) * mag_err) + extra
@@ -203,7 +203,7 @@ subroutine get_vector(model_mags, vector, L_sednoext, mu_d_noext)
 !! and L_sednoext = L_sed with zero extinction.
   !integer, intent(in) ::
   real, intent(in) :: model_mags(:)
-  real, intent(out) :: L_sednoext 
+  real, intent(out) :: L_sednoext
   real, intent(out) :: vector(2)
   real, intent(out) :: mu_d_noext
     if (parallax_known) then
@@ -218,7 +218,7 @@ subroutine get_vector(model_mags, vector, L_sednoext, mu_d_noext)
       if (distance_prior.eq.1) then
         vector(1) = vector(1) + log(10.)*0.4
       else if (distance_prior.eq.2) then
-        vector(1) = vector(1) + 0.2 * log(10.) * (2. - mu_d_to_distance(mu_d_noext)/prior_parameter) 
+        vector(1) = vector(1) + 0.2 * log(10.) * (2. - mu_d_to_distance(mu_d_noext)/prior_parameter)
       endif
       vector(2) = sum((mag - model_mags)*mag_err*Ck)
       mu_d_noext = vector(1) / matrix0(1, 1)
@@ -234,9 +234,9 @@ end function mu_d_to_distance
 
 subroutine process_model_set(in_size, model_ids, out_size, out_models, special_models)
   integer, intent(in) :: in_size
-  real, intent(in) :: model_ids(in_size)
+  integer, intent(in) :: model_ids(in_size)
   integer, intent(in) :: out_size
-  
+
   real, intent(out) :: out_models(in_size, out_size)
   real, intent(out) :: special_models(in_size, 5)
   real current_model(model_column_count)

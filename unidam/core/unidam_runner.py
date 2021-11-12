@@ -99,7 +99,7 @@ if args.parallel:
         pool_size = int(os.environ['OMP_NUM_THREADS'])
     else:
         pool_size = 2
-
+    logger.info("Running parallel run with %s threads" % pool_size)
     def run_single(patch):
         des = deepcopy(de)
         tbl = deepcopy(final)
@@ -179,6 +179,7 @@ with warnings.catch_warnings():
     if os.path.exists(args.output):
         os.remove(args.output)
     final.meta = vars(args)
+    final.meta.update(de.config)
     unfitted.meta = vars(args)
     final.write(args.output)
     if os.path.exists('%s_unfitted.fits' % args.output):

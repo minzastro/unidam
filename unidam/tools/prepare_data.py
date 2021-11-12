@@ -42,6 +42,14 @@ from configobj import ConfigObj
 import healpy as hp
 import warnings
 
+
+def clean(table):
+    for column in ['RAJ2000_2', 'DEJ2000_2', 'ra_2', 'dec_2', 'angDist_2',
+                   'l_2', 'b_2']:
+        if column in table.colnames:
+            table.remove_column(column)
+
+
 warnings.filterwarnings('ignore', category=AstropyWarning)
 warnings.filterwarnings('ignore', category=UserWarning)
 
@@ -140,10 +148,12 @@ if type(need_matches) == str:
 print('Has matches: %s' % has_matches)
 print('Need matches: %s' % need_matches)
 
+
 def update_Gaia(data):
     data['parallax'] *= 1e-3
     data['parallax_error'] *= 1e-3
     return data
+
 
 def update_UKIDSS(data):
     for band in ['y', 'j_1', 'h', 'k']:
@@ -155,38 +165,41 @@ def update_UKIDSS(data):
         data.rename_column('%sAperMag3Err' % band, 'e_UKIDSS%smag' % band.upper()[0])
     return data
 
+
 XMATCH_PARAMS = {
     '2MASS': {'catalog': 'vizier:II/246/out',
               'update': None,
               'remove_columns': ['angDist',
-                         'errHalfMaj', 'errHalfMin', 'errPosAng',
-                         'X', 'MeasureJD']},
+                                 'errHalfMaj', 'errHalfMin', 'errPosAng',
+                                 'X', 'MeasureJD']},
     'LAS': {'catalog': 'vizier:II/319/las9',
-              'update': update_UKIDSS,
-              'remove_columns': ['mode', 'epoch', 'mergedClass']},
+            'update': update_UKIDSS,
+            'remove_columns': ['mode', 'epoch', 'mergedClass']},
     'AllWISE': {'catalog': 'vizier:II/328/allwise',
                 'update': None,
                 'remove_columns': ['angDist',
-                         'eeMaj', 'eeMin', 'eePA',
-                         'W3mag', 'W4mag',
-                         'e_W3mag', 'e_W4mag',
-                         'pmRA', 'e_pmRA', 'pmDE', 'e_pmDE', 'ID', 'd2M'] +
-                ['%smag_2' % b for b in 'JHK'] + ['e_%smag_2' % b for b in 'JHK']
+                                   'eeMaj', 'eeMin', 'eePA',
+                                   'W3mag', 'W4mag',
+                                   'e_W3mag', 'e_W4mag',
+                                   'pmRA', 'e_pmRA', 'pmDE', 'e_pmDE',
+                                   'ID', 'd2M'] +
+                ['%smag_2' % b for b in 'JHK'] +
+                ['e_%smag_2' % b for b in 'JHK']
                 },
     'Gaia': {'catalog': 'vizier:I/345/gaia2',
              'update': update_Gaia,
              'remove_columns': ['ra_epoch2000', 'dec_epoch2000',
-                         'errHalfMaj', 'errHalfMin', 'errPosAng',
-                         'ra_error', 'dec_error',
-                         'pmra', 'pmra_error', 'pmdec', 'pmdec_error',
-                         'duplicated_source', 'phot_g_mean_flux',
-                         'phot_g_mean_flux_error', 'phot_g_mean_mag',
-                         'phot_bp_mean_flux', 'phot_bp_mean_flux_error',
-                         'phot_bp_mean_mag', 'phot_rp_mean_flux',
-                         'phot_rp_mean_flux_error', 'phot_rp_mean_mag',
-                         'bp_rp', 'radial_velocity', 'radial_velocity_error',
-                         'rv_nb_transits', 'teff_val', 'a_g_val',
-                         'e_bp_min_rp_val', 'radius_val', 'lum_val']
+                                'errHalfMaj', 'errHalfMin', 'errPosAng',
+                                'ra_error', 'dec_error',
+                                'pmra', 'pmra_error', 'pmdec', 'pmdec_error',
+                                'duplicated_source', 'phot_g_mean_flux',
+                                'phot_g_mean_flux_error', 'phot_g_mean_mag',
+                                'phot_bp_mean_flux', 'phot_bp_mean_flux_error',
+                                'phot_bp_mean_mag', 'phot_rp_mean_flux',
+                                'phot_rp_mean_flux_error', 'phot_rp_mean_mag',
+                                'bp_rp', 'radial_velocity', 'radial_velocity_error',
+                                'rv_nb_transits', 'teff_val', 'a_g_val',
+                                'e_bp_min_rp_val', 'radius_val', 'lum_val']
              },
     'GaiaEDR3': {'catalog': 'vizier:I/350/gaiaedr3',
              'update': update_Gaia,
@@ -226,11 +239,6 @@ for colname in keep:
         keep.pop(keep.index(colname))
 data.keep_columns(set(keep))
 
-def clean(table):
-    for column in ['RAJ2000_2', 'DEJ2000_2', 'ra_2', 'dec_2', 'angDist_2',
-                   'l_2', 'b_2']:
-        if column in table.colnames:
-            table.remove_column(column)
 
 if 'extinction' not in config['mapping'] or \
     'extinction_error' not in config['mapping']:

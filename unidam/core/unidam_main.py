@@ -296,7 +296,7 @@ class UniDAMTool():
         else:
             mf.matrix_det = 0.  # Will be unsused anyway
         if self.mag.size > 0:
-            mf.alloc_mag(self.mag, self.mag_err, self.z)
+            mf.alloc_mag(self.mag, self.mag_err, self.Rk)
         if len(self.param) > 0:
             mf.alloc_param(self.param, self.param_err)
         # Collect model-file column indices of fitted columns

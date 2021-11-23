@@ -4,25 +4,24 @@ from setuptools import find_packages
 from numpy.distutils.core import setup, Extension, build_py
 
 model_fitter = Extension('unidam.core.model_fitter',
-                         sources=['unidam/core/model_fitter.f90'],
-                         depends=['unidam/core/Solve_NonLin.f90'])
-
+                         sources=['unidam/core/model_fitter.f90',
+                                  'unidam/core/Solve_NonLin.f90'])
 
 extra_functions = Extension('unidam.utils.extra_functions',
                             sources=['unidam/utils/extra_functions.f90'])
 
 
 class BuildPyCommand(build_py.build_py):
-  """Custom build command."""
-  def run(self):
-    result = subprocess.run(['./build_fortran.sh'], #shell=True,
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                            universal_newlines=True)
-    for s in [result.stdout, result.stderr]:
-        if len(s) > 0:
-            print(s)
-    build_py.build_py.run(self)
+    """Custom build command."""
+    def run(self):
+        result = subprocess.run(['./build_fortran.sh'],
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE,
+                                universal_newlines=True)
+        for s in [result.stdout, result.stderr]:
+            if len(s) > 0:
+                print(s)
+        build_py.build_py.run(self)
 
 
 setup(name='unidam',
@@ -53,4 +52,5 @@ setup(name='unidam',
                'unidam/tools/plot_sed.py',
                'unidam/tools/prepare_data.py'],
       cmdclass={'build_py': BuildPyCommand},
+      ext_modules=[model_fitter, extra_functions],
       zip_safe=False)

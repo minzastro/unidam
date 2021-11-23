@@ -3,9 +3,13 @@ import subprocess
 from setuptools import find_packages
 from numpy.distutils.core import setup, Extension, build_py
 
-model_fitter = Extension('unidam.iso.model_fitter',
-                         sources=['unidam/iso/model_fitter.f90'],
-                         depends=['unidam/iso/Solve_NonLin.f90'])
+model_fitter = Extension('unidam.core.model_fitter',
+                         sources=['unidam/core/model_fitter.f90'],
+                         depends=['unidam/core/Solve_NonLin.f90'])
+
+
+extra_functions = Extension('unidam.utils.extra_functions',
+                            sources=['unidam/utils/extra_functions.f90'])
 
 
 class BuildPyCommand(build_py.build_py):
@@ -26,11 +30,11 @@ setup(name='unidam',
       description='UniDAM tool',
       url='https://github.com/minzastro/unidam',
       author='Alexey Mints',
-      author_email='mints@mps.mpg.de',
+      author_email='amints@aip.de',
       packages=find_packages(),
-      package_data={'unidam.iso': ['unidam.conf',
-                                   'unidam_pdf.conf',
-                                   '*.so'],
+      package_data={'unidam.core': ['unidam.conf',
+                                    'unidam_pdf.conf',
+                                    '*.so'],
                     '': ['DEPENDENCIES']},
       include_package_data=True,
       install_requires=[
@@ -43,7 +47,7 @@ setup(name='unidam',
           "License :: OSI Approved :: MIT License",
           "Operating System :: OS Independent",
       ],
-      scripts=['unidam/iso/unidam_runner.py',
+      scripts=['unidam/core/unidam_runner.py',
                'unidam/tools/plot_2d_correlations.py',
                'unidam/tools/plot_parts.py',
                'unidam/tools/plot_sed.py',

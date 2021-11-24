@@ -167,7 +167,7 @@ class UniDAMTool():
         # fitted columns + columns for L_iso, L_sed and
         # at the very end - weight column
         self.w_column = len(self.fitted_columns) + 2
-        mf.max_param_err = config.getint('general', 'max_param_err')
+        mf.max_param_err = config.getfloat('general', 'max_param_err')
         mf.use_model_weight = True
         mf.use_magnitude_probability = \
             config.getboolean('general', 'use_magnitudes')

@@ -36,6 +36,8 @@ parser.add_argument('-i', '--input', type=str,
                     help='Input file name (any astropy-readable table)')
 parser.add_argument('-o', '--output', type=str, default='result.fits',
                     help='Output file name')
+parser.add_argument('--format', type=str, default='fits',
+                    help='Output file format (one from astropy formats)')
 parser.add_argument('-c', '--config', type=str,
                     required=True,
                     help='Config file name')
@@ -181,7 +183,7 @@ with warnings.catch_warnings():
     final.meta = vars(args)
     final.meta.update(de.config)
     unfitted.meta = vars(args)
-    final.write(args.output)
+    final.write(args.output, format=args.format)
     if os.path.exists('%s_unfitted.fits' % args.output):
         os.remove('%s_unfitted.fits' % args.output)
-    unfitted.write('%s_unfitted.fits' % args.output)
+    unfitted.write('%s_unfitted.fits' % args.output, format='fits')

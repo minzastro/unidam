@@ -10,6 +10,7 @@ from unidam.utils.fit import find_best_fit
 import warnings
 from scipy.optimize import OptimizeWarning
 
+
 class HistogramAnalyzer():
     MINIMUM_STEP = {'age': 0.02,
                     'distance_modulus': 0.04,
@@ -17,9 +18,8 @@ class HistogramAnalyzer():
                     'extinction': 0.001,
                     'parallax': 0.00}
 
-
     def __init__(self, name, mode_data, weights, smooth=None,
-                     extinction_data=None, dump=False):
+                 extinction_data=None, dump=False):
         self.name = name
         self.mode_data = mode_data
         self.weights = weights
@@ -104,13 +104,9 @@ class HistogramAnalyzer():
             # This is done for the case of very low weights...
             # I guess it should be done otherwise, but...
             err = max(np.std(self.mode_data), bin_step * 0.2)
-        #elif err > 0.5 * (self.m_max - self.m_min):
-        #    # This is for the case of very high smoothing values.
-        #    err = 0.5 * (self.m_max - self.m_min)
         elif err < bin_step * 0.2:
             err = bin_step * 0.2
         return err
-
 
     def get_bin_count(self):
         """
@@ -121,7 +117,8 @@ class HistogramAnalyzer():
             # Fixed step in mass, as masses are discrete
             # for some isochrones.
             bins = np.arange(self.m_min * 0.95,
-                             max(self.m_max * 1.1, self.m_min * 0.95 + 0.13), 0.06)
+                             max(self.m_max * 1.1, self.m_min * 0.95 + 0.13),
+                             0.06)
         elif self.name == 'distance':
             # Fixed number of bins for distances
             bins = np.linspace(self.m_min * 0.95,
@@ -136,6 +133,11 @@ class HistogramAnalyzer():
             bin_size, _ = bin_estimate(self.mode_data, self.weights)
             if self.name in self.MINIMUM_STEP:
                 bin_size = max(bin_size, self.MINIMUM_STEP[self.name])
+            elif self.name in ['delta_nu', 'nu_max']:
+                # Minimum bin size is 4% of the value:
+                bin_size = max(bin_size,
+                               np.average(self.mode_data,
+                                          weights=self.weights) / 25.)
             if bin_size < np.finfo(np.float32).eps:
                 # In some (very ugly) cases h cannot be properly
                 # determined...
@@ -144,7 +146,6 @@ class HistogramAnalyzer():
                 bin_count = max(int((self.m_max - m_min) / bin_size) + 1, 3)
             bins = np.linspace(m_min, self.m_max, bin_count)
         return bins
-
 
     def process_mode(self):
         """
@@ -174,8 +175,8 @@ class HistogramAnalyzer():
                     hist, bin_centers = self._get_histogram_parts(bins)
                     avg, err = wstatistics(bin_centers, hist, 2)
                 else:
-                    hist, bin_centers = self._get_histogram(bins, self.mode_data,
-                                                            self.weights, self.smooth)
+                    hist, bin_centers = self._get_histogram(
+                        bins, self.mode_data, self.weights, self.smooth)
                 mode = bin_centers[np.argmax(hist)]
                 if np.sum(hist > 0) < 4:
                     #  Less than 4 non-negative bins, impossible to fit.
@@ -183,7 +184,8 @@ class HistogramAnalyzer():
                     fit, par, kl_div = 'N', [], 7e10
                 else:
                     with warnings.catch_warnings():
-                        warnings.filterwarnings("ignore",  category=OptimizeWarning)
+                        warnings.filterwarnings("ignore",
+                                                category=OptimizeWarning)
                         fit, par, kl_div = find_best_fit(bin_centers, hist,
                                                          avg, err)
                     if kl_div > 1e9:
@@ -232,11 +234,11 @@ class HistogramAnalyzer():
         sigma3 = to_borders(find_confidence(bin_centers, hist,
                                             THREE_SIGMA),
                             self.m_min, self.m_max)
-        return  {'_par': result_par,
-                 '_low_1sigma': sigma1[0],
-                 '_up_1sigma': sigma1[1],
-                 '_low_3sigma': sigma3[0],
-                 '_up_3sigma': sigma3[1]}
+        return {'_par': result_par,
+                '_low_1sigma': sigma1[0],
+                '_up_1sigma': sigma1[1],
+                '_low_3sigma': sigma3[0],
+                '_up_3sigma': sigma3[1]}
 
     def _dummy_result(self, avg, err):
         return {'_par': np.array([avg, err, 0., 0., 0.]),

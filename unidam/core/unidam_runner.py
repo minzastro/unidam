@@ -72,7 +72,7 @@ de = UniDAMTool(config_filename=args.config, config_override=override)
 de.id_column = 'id'  # Default ID column.
 idtype = data.columns[de.id_column].dtype
 if mf.parallax_known:
-    data[de.config['parallax']] += args.parallax_zero
+    data[de.config['parallax']] -= args.parallax_zero
 final = de.get_table(data, idtype)
 unfitted = Table()
 unfitted['id'] = Column(dtype=idtype)

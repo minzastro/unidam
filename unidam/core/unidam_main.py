@@ -363,7 +363,8 @@ class UniDAMTool():
         if 0 < model_mask.sum() < 50:
             self.logger.info('Adding more models for %s', row[self.id_column])
             # Add intermediate models
-            ind = np.arange(len(self.model_data), dtype=int)[indices][model_mask]
+            ind = np.arange(len(self.model_data),
+                            dtype=int)[indices][model_mask]
             new_models = []
             new_special = []
             for ii in ind:
@@ -401,7 +402,16 @@ class UniDAMTool():
         return model_params[model_params[:, -2] > 0], \
             special_params[model_params[:, -2] > 0]
 
-    def get_mode_weights(self, row, model_params):
+    def get_mode_weights(self, id, model_params):
+        """Calculate mode weights for each stage.
+
+        Args:
+            id: ID of the star (for messages)
+            model_params: array of models that fit
+
+        Returns:
+            dictionary of  the shape {Stage: weight}
+        """
         stages = np.asarray(model_params[:, 0], dtype=int)
         uniq_stages = np.unique(stages)
         mode_weight = np.zeros(len(uniq_stages))
@@ -411,15 +421,14 @@ class UniDAMTool():
         total_mode_weight = np.sum(mode_weight)
         if total_mode_weight == 0.:
             # Does this ever work?
-            self.logger.warn('No model fitting (test) for %s',
-                             row[self.id_column])
-            return {'id': row[self.id_column],
+            self.logger.warn('No model fitting (test) for %s', id)
+            return {'id': id,
                     'error': 'No model fitting'}
         try:
             mode_weight = mode_weight / total_mode_weight
         except ZeroDivisionError:
-            self.logger.warn('Zero weight for %s', row[self.id_column])
-            return {'id': row[self.id_column],
+            self.logger.warn('Zero weight for %s', id)
+            return {'id': id,
                     'error': 'Zero weight'}
         result = {}
         for istage, stage in enumerate(uniq_stages):
@@ -433,20 +442,21 @@ class UniDAMTool():
         # Set maximum differnce between model and observation in units
         # of the observational error.
         self.config['dump'] = dump
+        id = row[self.id_column]
         self.prepare_star(row)
-        validate = self._validate_star(row[self.id_column])
+        validate = self._validate_star(id)
         if validate is not None:
             return validate
         self._push_to_fortran(row)
         if np.isinf(mf.parallax_l_correction):
-            return {'id': row[self.id_column],
+            return {'id': id,
                     'error': 'Parallax is too negative'}
         # HERE THINGS HAPPEN!
         model_params, model_special = self.get_fitting_models(row)
         if model_params is None or len(model_params) == 0:
-            return {'id': row[self.id_column],
+            return {'id': id,
                     'error': 'No model fitting'}
-        stage_weights = self.get_mode_weights(row, model_params)
+        stage_weights = self.get_mode_weights(id, model_params)
         # Setting best stage
         result = []
         for part_weight, part_data, part_special in self.data_splitter(
@@ -459,7 +469,7 @@ class UniDAMTool():
             result[best]['uspdf_priority'] = ibest
         for item in result:
             item.update({'total_uspdfs': len(result),
-                         'id': row[self.id_column]})
+                         'id': id})
             for keep in self.keep_columns:
                 item[keep] = row[keep]
         # Sort by priority
@@ -471,6 +481,17 @@ class UniDAMTool():
         return result
 
     def data_splitter(self, stage_weights, model_params, model_special):
+        """Split data into unimodal sub-PDFs.
+
+        Args:
+            stage_weights: dictionary of  the shape {Stage: weight}
+            model_params: models that fit
+            model_special: "special" model columns
+
+        Yields:
+            tuple of weight, model data and model special columns
+            for each USPDF.
+        """
         stages = np.asarray(model_params[:, 0], dtype=int)
         for stage, mode_weight in stage_weights.items():
             if mode_weight < self.MIN_USPDF_WEIGHT:
@@ -511,8 +532,7 @@ class UniDAMTool():
                 self.mag_err[iband] = np.nan
             else:
                 self.mag_err[iband] = 1. / (row['e_%smag' % band]) ** 2
-            self.Rk[iband] =self.RK[band]
-        #self.Rk = np.array([self.RK[band] for band in self.default_bands.keys()])
+            self.Rk[iband] = self.RK[band]
         self.abs_mag = np.array(list(self.default_bands.values()), dtype=int)
         # Filter out bad data:
         self._apply_mask(~(np.isnan(self.mag_err) + np.isnan(self.mag)))
@@ -702,19 +722,16 @@ class UniDAMTool():
             fracpar = -mf.parallax / mf.parallax_error
             if fracpar > -10:
                 return {
-                    'p_sed': 1. - get_modified_chi2(fracpar, dof,
-                                                    2. * (l_sed - mf.parallax_l_correction)),
-                    'p_best': 1. - get_modified_chi2(fracpar, dof + len(self.model_columns),
-                                                     2. * (l_best - mf.parallax_l_correction)),
+                    'p_sed': 1. - get_modified_chi2(
+                        fracpar, dof,
+                        2. * (l_sed - mf.parallax_l_correction)),
+                    'p_best': 1. - get_modified_chi2(
+                        fracpar, dof + len(self.model_columns),
+                        2. * (l_best - mf.parallax_l_correction)),
                        }
-            else:
-                return {'p_sed': 1. - chi2.cdf(2. * l_sed, dof),
-                        'p_best': 1. - chi2.cdf(2. * l_best, dof +
-                                                len(self.model_columns))}
-        else:
-            return {'p_sed': 1. - chi2.cdf(2. * l_sed, dof),
-                    'p_best': 1. - chi2.cdf(2. * l_best, dof +
-                                            len(self.model_columns))}
+        return {'p_sed': 1. - chi2.cdf(2. * l_sed, dof),
+                'p_best': 1. - chi2.cdf(2. * l_best, dof +
+                                        len(self.model_columns))}
 
     def get_row(self, xdata, xspecial, xweight):
         """

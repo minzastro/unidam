@@ -203,7 +203,7 @@ if __name__ == '__main__':
 
     folder = args.dump
     if args.dev:
-        folder = f'../iso/{folder}'
+        folder = f'../core/{folder}'
 
     PLOTS = {'A': ('age', 1),
              'M': ('mass', 2),

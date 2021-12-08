@@ -62,7 +62,7 @@ else:
     ids = args.input.split(',')
 folder = args.dump
 if args.dev:
-    folder = f'../iso/{folder}'
+    folder = f'../core/{folder}'
 for id in ids:
     print(id)
     data = json.load(open('%s/dump_%s.json' % (folder, id)))

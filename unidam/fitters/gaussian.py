@@ -19,7 +19,9 @@ class TGaussianFit(basic.PdfFitter):
 
     def __init__(self, x, y):
         super(TGaussianFit, self).__init__(x, y)
-        y_good = np.where(y > 0)[0]
+        y_good = np.where(y > 0.1 * y.max())[0]
         lower = x[y_good[0]]
         upper = x[y_good[-1]]
+        self.bounds = ((-np.inf, -np.inf, x.min(), x.min()),
+                       (np.inf, np.inf, x.max(), x.max()))
         self.init_params.extend([lower, upper])

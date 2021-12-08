@@ -2,8 +2,7 @@ import warnings
 import numpy as np
 from scipy.stats import norm
 from scipy.optimize import curve_fit
-import warnings
-from unidam.utils.mathematics import kl_divergence
+from unidam.utils.mathematics import kl_divergence, wstatistics
 
 warnings.filterwarnings("ignore", category=np.RankWarning)
 
@@ -25,7 +24,7 @@ class PdfFitter():
     def __init__(self, x, y):
         self.x = x
         self.y = y
-        self.init_params = None
+        self.init_params = wstatistics(x, y, 2)
         self.y_range = (y.min(), y.max())
         self.bounds = None
 

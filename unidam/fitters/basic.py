@@ -14,6 +14,9 @@ class PdfFitter():
     LETTER = ''
     ONLY_POSITIVE = True
 
+    def is_applicable(self):
+        return True
+
     def is_solution_ok(self, popt, pcov):
         if np.any(np.isinf(np.diag(pcov))):
             return False
@@ -44,17 +47,20 @@ class PdfFitter():
             passed = False
         if not passed:
             if self.USE_TRF:
-                print('%s attempts TRF' % self.__class__)
+                #print('%s attempts TRF' % self.__class__)
                 # Try something else...
-                popt, pcov = curve_fit(self.FUNC,
-                                       self.x,
-                                       self.y,
-                                       self.init_params,
-                                       ftol=1e-5, method='trf',
-                                       bounds=self.bounds)
-                if not self.is_solution_ok(popt, pcov):
-                    # Fit did not converge
-                    return [self.init_params, 1e10]
+                try:
+                    popt, pcov = curve_fit(self.FUNC,
+                                           self.x,
+                                           self.y,
+                                           self.init_params,
+                                           ftol=1e-5, method='trf',
+                                           bounds=self.bounds)
+                    if not self.is_solution_ok(popt, pcov):
+                        # Fit did not converge
+                        return [self.init_params, 1e10]
+                except RuntimeError:
+                    return [self.init_params, 2e10]
             else:
                 return [self.init_params, 1e10]
         return [popt, kl_divergence(self.x, self.FUNC, popt, self.y)]

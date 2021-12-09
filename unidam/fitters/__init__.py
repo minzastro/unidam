@@ -13,11 +13,13 @@ def find_best_fit2(xdata, ydata, return_all=False):
     best_value = 1e20
     for fitter_class in FITTERS:
         fitter = fitter_class(xdata, ydata)
-        fit = fitter.fit()
-        if fit[1][-1] < best_value:
-            best_value = fit[1][-1]
-            best = fitter.LETTER
-        result[fitter.LETTER] = fit[-1]
+        if fitter.is_applicable():
+            #print(fitter)
+            fit = fitter.fit()
+            if fit[1][-1] < best_value:
+                best_value = fit[1][-1]
+                best = fitter.LETTER
+            result[fitter.LETTER] = fit[-1]
     if return_all:
         return result
     return best, *result[best]

@@ -27,3 +27,5 @@ class StudentsFit(basic.PdfFitter):
         nu0 = np.min([np.power(self.init_params[-1], -0.7), 1])
         self.init_params.append(nu0)
 
+    def is_applicable(self):
+        return len(self.x) > 2

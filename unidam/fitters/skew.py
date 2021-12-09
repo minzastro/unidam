@@ -38,3 +38,5 @@ class SkewFit(basic.PdfFitter):
                               self.init_params[1], x[np.argmax(y)])
         self.init_params.append(param)
 
+    def is_applicable(self):
+        return len(self.x) > 4

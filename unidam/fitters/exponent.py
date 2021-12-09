@@ -25,3 +25,6 @@ class ExponentFit(basic.PdfFitter):
             return True
         else:
             return False
+
+    def is_applicable(self):
+        return len(self.x) > 2

@@ -68,7 +68,7 @@ class LinearFit(basic.PdfFitter):
         solution[3] = self._get_residual(solution)
         self.new_test = self.test
         if modepos > 0:
-            while solution[-1]:
+            while solution[-1] and solution[1] > 0:
                 # Increase lower bound gradually,
                 # re-fitting at each step, while residuals decrease.
                 solution = self._move_lower(solution)

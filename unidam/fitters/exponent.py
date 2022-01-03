@@ -16,9 +16,11 @@ class ExponentFit(basic.PdfFitter):
     USE_TRF = True
 
     def is_solution_ok(self, popt, pcov):
-        # If mu is outside the support interval,
-        # then there is a degeneracy between mu and sigma.
-        # In this case only sigma has to be constrained.
+        """
+        If mu is outside the support interval,
+        then there is a degeneracy between mu and sigma.
+        In this case only sigma has to be constrained.
+        """
         if ((popt[0] > self.x.max() or popt[0] < self.x.min()) and
             np.sqrt(pcov[1, 1]) < 10. * np.abs(popt[1])) or \
                 np.all(np.sqrt(np.abs(np.diag(pcov))) < 10. * np.abs(popt)):

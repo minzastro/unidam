@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.stats.stats import mode
 from unidam.fitters import basic
 from unidam.utils.mathematics import kl_divergence
 

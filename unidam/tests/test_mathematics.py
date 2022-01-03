@@ -53,4 +53,4 @@ class MathTest(unittest.TestCase):
         a = [1, 2, 3, 3, 4, 5]
         mathematics.move_to_end(a, 3)
         self.assertEqual(a, [1, 2, 3, 4, 5, 3])
-        
+

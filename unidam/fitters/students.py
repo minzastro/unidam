@@ -18,7 +18,8 @@ class StudentsFit(basic.PdfFitter):
     def is_solution_ok(self, popt, pcov):
         if np.any(np.isinf(np.diag(pcov))):
             return False
-        if np.any(np.sqrt(np.abs(np.diag(pcov)))[:-1] > 10. * np.abs(popt)[:-1]):
+        if np.any(np.sqrt(np.abs(np.diag(pcov)))[:-1] >
+                  10. * np.abs(popt)[:-1]):
             return False
         return True
 

@@ -7,6 +7,7 @@ from unidam.utils.confidence import find_confidence, ONE_SIGMA, THREE_SIGMA
 from unidam.utils.mathematics import wstatistics, quantile, bin_estimate, \
     to_borders
 from unidam.utils.fit import find_best_fit
+from unidam.fitters import find_best_fit2
 import warnings
 from scipy.optimize import OptimizeWarning
 
@@ -186,8 +187,7 @@ class HistogramAnalyzer():
                     with warnings.catch_warnings():
                         warnings.filterwarnings("ignore",
                                                 category=OptimizeWarning)
-                        fit, par, kl_div = find_best_fit(bin_centers, hist,
-                                                         avg, err)
+                        fit, par, kl_div = find_best_fit2(bin_centers, hist)
                     if kl_div > 1e9:
                         # No fit converged.
                         fit = 'E'

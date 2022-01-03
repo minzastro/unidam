@@ -91,7 +91,6 @@ class TGaussianFit(basic.PdfFitter):
             self.upper = min(self.upper + 1, len(self.x) - 1)
         solution = [None, self.lower, self.upper,
                     0, True]
-        #print(self.x, self.y, solution)
         solution[0] = self._local_fit(solution)
         solution[3] = self._get_residual(solution)
         if modepos > 0:

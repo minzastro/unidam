@@ -1,6 +1,5 @@
 import warnings
 import numpy as np
-from scipy.stats import norm
 from scipy.optimize import curve_fit
 from unidam.utils.mathematics import kl_divergence, wstatistics
 
@@ -14,16 +13,6 @@ class PdfFitter():
     LETTER = ''
     ONLY_POSITIVE = True
 
-    def is_applicable(self):
-        return True
-
-    def is_solution_ok(self, popt, pcov):
-        if np.any(np.isinf(np.diag(pcov))):
-            return False
-        if np.any(np.sqrt(np.abs(np.diag(pcov))) > 10. * np.abs(popt)):
-            return False
-        return True
-
     def __init__(self, x, y):
         self.x = x
         self.y = y
@@ -34,6 +23,33 @@ class PdfFitter():
         self.init_params = wstatistics(x, y, 2)
         self.y_range = (y.min(), y.max())
         self.bounds = (-np.inf, np.inf)
+
+    def is_applicable(self):
+        """Returns:
+            True if the fitter can be applied to the data.
+        """
+        return True
+
+    def is_solution_ok(self, popt, pcov):
+        """ Test if the current solution is acceptable.
+        This is True if:
+            a) Covariance matrix elements are all non-infinite AND
+            b) Parameter uncertainties (from the covarinace matrix diagonal)
+               are smaller than 10xparameter - this is to exclude
+               very poor fits.
+
+        Args:
+            popt : array of optimal parameters
+            pcov : covariance matrix.
+
+        Returns:
+            [type]: [description]
+        """
+        if np.any(np.isinf(np.diag(pcov))):
+            return False
+        if np.any(np.sqrt(np.abs(np.diag(pcov))) > 10. * np.abs(popt)):
+            return False
+        return True
 
     def _fit(self):
         try:
@@ -47,7 +63,6 @@ class PdfFitter():
             passed = False
         if not passed:
             if self.USE_TRF:
-                #print('%s attempts TRF' % self.__class__)
                 # Try something else...
                 try:
                     popt, pcov = curve_fit(self.FUNC,

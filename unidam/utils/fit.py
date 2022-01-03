@@ -120,7 +120,7 @@ def do_fit_exponent(xdata, ydata, p0, lower, upper):
     try:
         popt, pcov = curve_fit(exponent, xdata, ydata, p0,
                                ftol=1e-5)
-    except RuntimeError:
+    except (RuntimeError, IndexError):
         return [p0, 2e10]
     # If mu is outside the support interval,
     # then there is a degeneracy between mu and sigma.
@@ -157,7 +157,7 @@ def do_fit(xdata, ydata, func, p0, bounds=(-np.inf, np.inf),
             else:
                 return [p0, 1e10]
         return [popt, kl_divergence(xdata, func, popt, ydata)]
-    except (RuntimeError, TypeError):
+    except (RuntimeError, TypeError, ValueError):
         # Error while fitting
         return [p0, 1.5e10]
 
@@ -185,7 +185,7 @@ def do_fit_student(xdata, ydata, p0):
     try:
         popt, _ = curve_fit(t_student, xdata, ydata, p0, ftol=1e-5)
         return [popt, kl_divergence(xdata, t_student, popt, ydata)]
-    except (RuntimeError, TypeError):
+    except (RuntimeError, TypeError, IndexError):
         # Error while fitting
         return [p0, 1.5e10]
 

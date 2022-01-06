@@ -26,6 +26,10 @@ from unidam.utils.log import get_logger
 from future import standard_library
 standard_library.install_aliases()
 
+# This is to prevent BLAS from using more than 1 processor!
+import os
+os.environ['MKL_NUM_THREADS'] = '1'
+
 logger = get_logger("UniDAM_runner", True, '')
 np.set_printoptions(linewidth=200)
 parser = argparse.ArgumentParser(description="""

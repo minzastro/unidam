@@ -11,8 +11,6 @@ the command-line.
 from __future__ import print_function, unicode_literals, division, \
     absolute_import
 from builtins import zip, int
-from future import standard_library
-standard_library.install_aliases()
 import numpy as np
 import argparse
 import os
@@ -25,6 +23,12 @@ from unidam.core.unidam_main import UniDAMTool
 from unidam.utils.constants import AGE_RANGE
 from unidam.utils.timer import Timer
 from unidam.utils.log import get_logger
+from future import standard_library
+standard_library.install_aliases()
+
+# This is to prevent BLAS from using more than 1 processor!
+import os
+os.environ['MKL_NUM_THREADS'] = '1'
 
 logger = get_logger("UniDAM_runner", True, '')
 np.set_printoptions(linewidth=200)
@@ -53,11 +57,11 @@ parser.add_argument('--parallax-zero', type=float,
                     help='Parallax zero point value')
 group = parser.add_mutually_exclusive_group()
 group.add_argument('-d', '--dump-results', action="store_true",
-                    default=False,
-                    help='Dump model data for each star')
+                   default=False,
+                   help='Dump model data for each star')
 group.add_argument('-p', '--parallel', action="store_true",
-                    default=False,
-                    help='Run in parallel (uses OMP_NUM_THREADS if given, otherwise 2 threads)')
+                   default=False,
+                   help='Run in parallel (uses OMP_NUM_THREADS if given, otherwise 2 threads)')
 args = parser.parse_args()
 
 with warnings.catch_warnings():
@@ -72,7 +76,7 @@ de = UniDAMTool(config_filename=args.config, config_override=override)
 de.id_column = 'id'  # Default ID column.
 idtype = data.columns[de.id_column].dtype
 if mf.parallax_known:
-    data[de.config['parallax']] += args.parallax_zero
+    data[de.config['parallax']] -= args.parallax_zero
 final = de.get_table(data, idtype)
 unfitted = Table()
 unfitted['id'] = Column(dtype=idtype)
@@ -86,7 +90,8 @@ if args.id is not None:
     ids = (args.id).split(',')
     if idtype.kind == 'S':
         len_id = idtype.itemsize
-        mask = [j.strip() in np.asarray(ids, dtype=str) for j in data[de.id_column]]
+        mask = [j.strip() in np.asarray(ids, dtype=str)
+                for j in data[de.id_column]]
     else:
         mask = [j in np.asarray(ids, dtype=idtype) for j in data[de.id_column]]
     data = data[np.where(mask)]
@@ -102,6 +107,7 @@ if args.parallel:
     else:
         pool_size = 2
     logger.info("Running parallel run with %s threads" % pool_size)
+
     def run_single(patch):
         des = deepcopy(de)
         tbl = deepcopy(final)

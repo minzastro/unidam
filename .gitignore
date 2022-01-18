@@ -7,3 +7,12 @@
 *.png
 .kdev4
 *.kdev4
+.idea/*
+build/*
+dist/*
+.vscode/settings.json
+unidam/.idea/*
+unidam/.ipynb_checkpoints/*
+unidam/core/.build/*
+unidam/core/.ipynb_checkpoints/*
+unidam.egg-info/*

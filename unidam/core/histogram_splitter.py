@@ -4,9 +4,9 @@ from __future__ import print_function
 from __future__ import absolute_import
 from builtins import range
 from future import standard_library
-standard_library.install_aliases()
 import numpy as np
 from scipy.signal import argrelextrema
+standard_library.install_aliases()
 
 
 def histogram_splitter(hist, bins, min_order=2, max_order=3, dip_depth=0.75,

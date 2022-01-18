@@ -32,7 +32,8 @@ class MathTest(unittest.TestCase):
         v = np.arange(20, dtype=float)
         assert_equal(mathematics.quantile(v, np.ones(20), 0.5), 9.5)
         assert_equal(mathematics.quantile(v, np.ones(20), 0.25), 4.5)
-        assert_equal(mathematics.quantile(v, np.ones(20), [0.25, 0.75]), [4.5, 14.5])
+        assert_equal(mathematics.quantile(v, np.ones(20), [0.25, 0.75]),
+                     [4.5, 14.5])
         w = np.ones(20)
         w[:10] = 2
         assert_equal(mathematics.quantile(v, w, 0.5), 7.)
@@ -53,4 +54,15 @@ class MathTest(unittest.TestCase):
         a = [1, 2, 3, 3, 4, 5]
         mathematics.move_to_end(a, 3)
         self.assertEqual(a, [1, 2, 3, 4, 5, 3])
-        
+
+    def test_move_to_beginning(self):
+        a = [1, 2, 3, 4, 5]
+        mathematics.move_to_beginning(a, 3)
+        self.assertEqual(a, [3, 1, 2, 4, 5])
+        a = [1, 2, 3, 4, 5]
+        mathematics.move_to_beginning(a, 0)
+        self.assertEqual(a, [1, 2, 3, 4, 5])
+        a = [1, 2, 3, 3, 4, 5]
+        mathematics.move_to_beginning(a, 3)
+        self.assertEqual(a, [3, 1, 2, 3, 4, 5])
+

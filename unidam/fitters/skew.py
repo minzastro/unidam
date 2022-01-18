@@ -32,6 +32,8 @@ class SkewFit(basic.PdfFitter):
 
     USE_TRF = True
 
+    PADDING = True
+
     def __init__(self, x, y):
         super(SkewFit, self).__init__(x, y)
         param = estimate_skew(self.init_params[0],

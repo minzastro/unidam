@@ -15,6 +15,8 @@ class StudentsFit(basic.PdfFitter):
 
     USE_TRF = True
 
+    PADDING = True
+
     def is_solution_ok(self, popt, pcov):
         if np.any(np.isinf(np.diag(pcov))):
             return False

@@ -15,6 +15,8 @@ class ExponentFit(basic.PdfFitter):
 
     USE_TRF = True
 
+    PADDING = True
+
     def is_solution_ok(self, popt, pcov):
         """
         If mu is outside the support interval,

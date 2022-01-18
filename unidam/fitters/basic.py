@@ -12,17 +12,23 @@ class PdfFitter():
     FUNC = None
     LETTER = ''
     ONLY_POSITIVE = True
+    PADDING = False
 
     def __init__(self, x, y):
         self.x = x
+        step = x[1] - x[0]
         self.y = y
         if self.ONLY_POSITIVE:
             y_good = np.where(y > 0)[0]
             self.x = x[y_good[0]:y_good[-1] + 1]
             self.y = y[y_good[0]:y_good[-1] + 1]
         self.init_params = wstatistics(x, y, 2)
-        self.y_range = (y.min(), y.max())
         self.bounds = (-np.inf, np.inf)
+        if self.PADDING:
+            self.x = np.concatenate([np.arange(x[0] - step*10, x[0], step),
+                                    x,
+                                    np.arange(x[-1], x[-1] + step * 10, step)])
+            self.y = np.pad(self.y, 10, mode='constant', constant_values=0)
 
     def is_applicable(self):
         """Returns:

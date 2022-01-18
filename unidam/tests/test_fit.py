@@ -1,7 +1,7 @@
 import numpy as np
 import unittest
 from numpy.testing import assert_equal, assert_almost_equal
-from unidam.fitters import FITTERS, find_best_fit2
+from unidam.fitters import find_best_fit2
 
 
 class FitTest(unittest.TestCase):

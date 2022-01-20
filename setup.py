@@ -25,7 +25,7 @@ class BuildPyCommand(build_py.build_py):
 
 
 setup(name='unidam',
-      version='1.0',
+      version='2.4',
       description='UniDAM tool',
       url='https://github.com/minzastro/unidam',
       author='Alexey Mints',

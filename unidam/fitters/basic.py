@@ -25,9 +25,11 @@ class PdfFitter():
         self.init_params = wstatistics(x, y, 2)
         self.bounds = (-np.inf, np.inf)
         if self.PADDING:
-            self.x = np.concatenate([np.arange(x[0] - step*10, x[0], step),
-                                    x,
-                                    np.arange(x[-1], x[-1] + step * 10, step)])
+            self.x = np.concatenate([np.arange(self.x[0] - step*10,
+                                               self.x[0] - step * 0.5, step),
+                                    self.x,
+                                    np.arange(self.x[-1] + step,
+                                              self.x[-1] + step * 10.5, step)])
             self.y = np.pad(self.y, 10, mode='constant', constant_values=0)
 
     def is_applicable(self):
@@ -80,7 +82,7 @@ class PdfFitter():
                     if not self.is_solution_ok(popt, pcov):
                         # Fit did not converge
                         return [self.init_params, 1e10]
-                except RuntimeError:
+                except (RuntimeError, ValueError):
                     return [self.init_params, 2e10]
             else:
                 return [self.init_params, 1e10]

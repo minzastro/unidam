@@ -14,7 +14,6 @@ def find_best_fit2(xdata, ydata, return_all=False):
     for fitter_class in FITTERS:
         fitter = fitter_class(xdata, ydata)
         if fitter.is_applicable():
-            #print(fitter)
             fit = fitter.fit()
             if fit[1][-1] < best_value:
                 best_value = fit[1][-1]

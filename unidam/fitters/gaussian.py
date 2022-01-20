@@ -38,13 +38,16 @@ class TGaussianFit(basic.PdfFitter):
         return fit_fun
 
     def _local_fit(self, solution):
-        popt, pcov = curve_fit(self._get_function(solution),
-                               self.x, self.y,
-                               self.init_params, method='trf',
-                               ftol=1e-5, bounds=self.bounds)
-        if self.is_solution_ok(popt, pcov):
-            return popt
-        else:
+        try:
+            popt, pcov = curve_fit(self._get_function(solution),
+                                   self.x, self.y,
+                                   self.init_params, method='trf',
+                                   ftol=1e-5, bounds=self.bounds)
+            if self.is_solution_ok(popt, pcov):
+                return popt
+            else:
+                return self.init_params
+        except ValueError:
             return self.init_params
 
     def _move_lower(self, solution):

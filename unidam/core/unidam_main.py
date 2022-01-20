@@ -366,7 +366,7 @@ class UniDAMTool():
             ind = np.arange(len(self.model_data),
                             dtype=int)[indices][model_mask]
             new_models = []
-            new_special = []
+            new_specials = []
             for ii in ind:
                 m1 = self.model_data[ii]
                 for offset in [1, -1]:
@@ -387,13 +387,13 @@ class UniDAMTool():
                                                                        xsize)
                         if res > 0:
                             new_models.append(new_model)
-                            new_special.append(new_special)
+                            new_specials.append(new_special)
             if len(new_models) == 0:
                 self.logger.warn('No model fitting for {}',
                                  row[self.id_column])
                 return None, None
             model_params = np.atleast_2d(new_models)
-            special_params = np.atleast_2d(new_special)
+            special_params = np.atleast_2d(new_specials)
             model_params[:, -1] = np.arange(len(model_params))
             special_params[:, -1] = np.arange(len(model_params))
         elif model_mask.sum() <= 0:

@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.optimize import curve_fit
-from unidam.utils.mathematics import kl_divergence
+from unidam.utils.mathematics import kl_divergence, wstatistics
 from unidam.fitters import basic
 from unidam.utils.extra_functions import unidam_extra_functions as uef
 
@@ -41,8 +41,8 @@ class TGaussianFit(basic.PdfFitter):
         try:
             popt, pcov = curve_fit(self._get_function(solution),
                                    self.x, self.y,
-                                   self.init_params, method='trf',
-                                   ftol=1e-5, bounds=self.bounds)
+                                   solution[0], method='trf',
+                                   ftol=1e-4, bounds=self.bounds)
             if self.is_solution_ok(popt, pcov):
                 return popt
             else:
@@ -85,6 +85,7 @@ class TGaussianFit(basic.PdfFitter):
         return new_solution
 
     def _fit(self):
+        #import ipdb; ipdb.set_trace()
         modepos = np.argmax(self.y)
         w = np.where(self.y > self.y.max() * 0.2)[0]
         self.lower = w[0]
@@ -92,7 +93,8 @@ class TGaussianFit(basic.PdfFitter):
         if self.lower == self.upper:
             self.lower = max(self.lower - 1, 0)
             self.upper = min(self.upper + 1, len(self.x) - 1)
-        solution = [None, self.lower, self.upper,
+        solution = [wstatistics(self.x, self.y, 2),
+                    self.lower, self.upper,
                     0, True]
         solution[0] = self._local_fit(solution)
         solution[3] = self._get_residual(solution)

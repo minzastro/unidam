@@ -12,7 +12,7 @@ class studentst():
     def pdf(cls, x, mu, sigma, degrees_of_freedom):
         result = uef.student_pdf(x, mu, np.abs(sigma),
                                  np.abs(degrees_of_freedom))
-        return result / (result.sum() * (x[1] - x[0]))
+        return result #/ result.sum()
 
 
 class skewnorm():
@@ -26,7 +26,7 @@ class exponent():
     def pdf(cls, x, mu, sigma):
         """Re-normalized exponent distribution."""
         result = np.exp(-np.abs(x - mu) / sigma)
-        return result / ((x[1] - x[0]) * result.sum())
+        return result #/  result.sum()
 
 
 
@@ -68,7 +68,7 @@ def get_param(fit, par):
         else:
             return studentst, par[:-2]
     elif fit == 'L':
-        if len(par) == 4:
+        if len(par) >= 4:
             sigma = np.abs(par[1])
             if par[0] < par[2]:
                 par[0] = par[2] - 1e-3

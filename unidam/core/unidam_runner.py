@@ -189,6 +189,7 @@ with warnings.catch_warnings():
     final.meta = vars(args)
     final.meta.update(de.config)
     unfitted.meta = vars(args)
+    unfitted.meta.update(de.config)
     final.write(args.output, format=args.format)
     if os.path.exists('%s_unfitted.fits' % args.output):
         os.remove('%s_unfitted.fits' % args.output)

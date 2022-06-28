@@ -54,7 +54,7 @@ real*8 function student_pdf_single ( x, a, b, c)
 
   student_pdf_single = gamma ( 0.5D+00 * ( c + 1.0D+00 ) ) / ( sqrt ( r8_pi * c ) &
     * gamma ( 0.5D+00 * c ) &
-    * sqrt ( ( 1.0D+00 + y * y / c ) ** ( c + 1.0D+00 ) ) )
+    * sqrt ( ( 1.0D+00 + y * y / c ) ** ( c + 1.0D+00 ) ) ) / b
 end
 
 subroutine student_pdf ( n, x, a, b, c, y)
@@ -111,11 +111,13 @@ subroutine student_pdf ( n, x, a, b, c, y)
 
   xx = ( x - a ) / b
 
-  y = exp( log_gamma( 0.5D+00 * ( c + 1.0D+00 ) ) - 0.5 * log( r8_pi * c ) &
-      - log_gamma(0.5 * c) - ( 0.5 * c + 0.5D+00 ) * log( 1.0D+00 + xx * xx / c ))
+  y = exp( log_gamma( 0.5D+00 * ( c + 1.0D+00 ) ) &
+      - 0.5 * log( r8_pi * c ) &
+      - log_gamma(0.5 * c) &
+      - ( 0.5 * c + 0.5D+00 ) * log( 1.0D+00 + xx * xx / c )) / b
   !y = gamma ( 0.5D+00 * ( c + 1.0D+00 ) ) / ( sqrt ( r8_pi * c ) &
   !  * gamma ( 0.5D+00 * c ) &
-  !  * ( 1.0D+00 + xx * xx / c ) ** ( 0.5 * c + 0.5D+00 ) ) 
+  !  * ( 1.0D+00 + xx * xx / c ) ** ( 0.5 * c + 0.5D+00 ) )
 end
 
 subroutine normal_01_cdf ( x, cdf )
@@ -455,7 +457,7 @@ subroutine skew_normal_pdf( x, a, b, c, pdf)
 !
 !  The purpose of this subroutine is to return the probability distribution
 !  function (pdf) value for a given x-axis location, given the parameters for
-!  the skew-normal distribution.  It is assumed that the parameters are 
+!  the skew-normal distribution.  It is assumed that the parameters are
 !  acceptable, the subroutine skew_normal_check should be called before.
 !
 !  Author: Kenny Anderson
@@ -480,7 +482,7 @@ subroutine skew_normal_pdf_arr( n, x, a, b, c, pdf)
 !
 !  The purpose of this subroutine is to return the probability distribution
 !  function (pdf) value for a given x-axis location, given the parameters for
-!  the skew-normal distribution.  It is assumed that the parameters are 
+!  the skew-normal distribution.  It is assumed that the parameters are
 !  acceptable, the subroutine skew_normal_check should be called before.
 !
 !  Author: Kenny Anderson

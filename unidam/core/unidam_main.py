@@ -241,7 +241,10 @@ class UniDAMTool():
             (self.model_data[:, :-1],
              np.arange(len(self.model_data))[:, np.newaxis],
              self.model_data[:, -1][:, np.newaxis]))
-        self.age_grid = np.asarray(table[2].data, dtype=float)
+        if len(table) >= 3:
+            self.age_grid = np.asarray(table[2].data, dtype=float)
+        else:
+            self.age_grid = np.unique(self.model_data[:, table[1].columns.names.index('age')])
         self.model_column_names = [column.name for column in table[1].columns]
         self.fitted_columns = self._names_to_indices(self.fitted_columns,
                                                      validate=True)
@@ -356,6 +359,7 @@ class UniDAMTool():
             # There are too many models fitting, we can reduce this number
             # to 100k
             reduction_factor = int(mask.sum() / 100000) + 1
+            self.logger.info("Too many models, throttling by a factor %s" % reduction_factor)
             indices = indices[::reduction_factor]
 
         model_params, special_params = mf.process_model_set(indices, xsize)

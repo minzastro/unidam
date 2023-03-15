@@ -246,7 +246,7 @@ subroutine process_model_set(in_size, model_ids, out_size, out_models, special_m
   logical success
   do i = 1, in_size
      current_model = models(model_ids(i), :)
-     call process_model(i, current_model, out_size, success, current_out, current_special)
+     call process_model(model_ids(i), current_model, out_size, success, current_out, current_special)
      out_models(i, :) = current_out
      special_models(i, :) = current_special
      if (.not.success) then
@@ -274,12 +274,14 @@ subroutine process_model(model_id, model, out_size, success, out_model, special_
     if (.not.(allocated(fitted_columns))) then
         write(0, *) 'fitted_columns not initialized!'
     endif
-    if ((.not.(allocated(param))).or.(.not.(allocated(param_err)))) then
-        write(0, *) 'param or param_err not initialized!'
-    endif
     prob = size(fitted_columns) + count(special_columns) + 1 ! Here probablities start
+    if ((.not.(allocated(param))).or.(.not.(allocated(param_err)))) then
+        !write(0, *) 'param or param_err not initialized!'
+        L_model = 0
+    else
+        L_model = 0.5*sum(((model(model_columns) - param) / param_err)**2)
+    endif
     ! Calculate chi^2 value for model parameters:
-    L_model = 0.5*sum(((model(model_columns) - param) / param_err)**2)
     if (L_model.ge.0.5*max_param_err**2) then
       ! Further filtering - replace box clipping by a circle
       success = .false.

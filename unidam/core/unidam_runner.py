@@ -10,6 +10,11 @@ the command-line.
 """
 from __future__ import print_function, unicode_literals, division, \
     absolute_import
+import os
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
+os.environ['NUMEXPR_NUM_THREADS'] = '1'
+
 from builtins import zip, int
 import numpy as np
 import argparse
@@ -27,8 +32,6 @@ from future import standard_library
 standard_library.install_aliases()
 
 # This is to prevent BLAS from using more than 1 processor!
-import os
-os.environ['MKL_NUM_THREADS'] = '1'
 
 logger = get_logger("UniDAM_runner", True, '')
 np.set_printoptions(linewidth=200)
@@ -148,6 +151,7 @@ if args.parallel:
                    np.vstack((AGE_RANGE, out_age_pdf)).T)
         np.savetxt('%s_2d_pdf.dat' % output_prefix, out_2d_pdf)
 else:
+    os.environ['OMP_NUM_THREADS'] = '1'
     if args.id is not None:
         # Debug mode is allowed only when a list of IDs is given.
         # This is done to prevent dumping HUGE amounts of data

@@ -21,4 +21,4 @@ def find_best_fit2(xdata, ydata, return_all=False):
             result[fitter.LETTER] = fit[-1]
     if return_all:
         return result
-    return best, *result[best]
+    return tuple([best]) + tuple(result[best])

@@ -11,8 +11,6 @@ the command-line.
 from __future__ import print_function, unicode_literals, division, \
     absolute_import
 from builtins import zip, int
-from future import standard_library
-standard_library.install_aliases()
 import numpy as np
 import argparse
 import os
@@ -101,7 +99,9 @@ if args.parallel:
         pool_size = 2
 
     def run_single(patch):
-        des = deepcopy(de)
+        #des = deepcopy(de)
+        des = UniDAMTool(config_filename=args.config, config_override=override)
+        des.id_column = 'id'  # Default ID column.
         tbl = deepcopy(final)
         bad = deepcopy(unfitted)
         for xrow in patch:
@@ -122,19 +122,20 @@ if args.parallel:
                     new_row['exec_time'] = exec_time.interval
                     new_row['pid'] = os.getpid()
                 tbl.add_row(new_row)
-        return tbl, des, bad
+        return tbl, des.total_age_pdf, des.total_2d_pdf, bad
 
     with mp.Pool(processes=pool_size) as pool:
         pool_result = pool.map(run_single, np.array_split(data, pool_size))
-        pool_result, des, bads = list(zip(*pool_result))
+        pool_result, des_age, des_2d, bads = list(zip(*pool_result))
     final = vstack(pool_result)
     unfitted = vstack(bads)
     if de.config['dump_pdf']:
-        out_age_pdf = np.zeros_like(des[0].total_age_pdf)
-        out_2d_pdf = np.zeros_like(des[0].total_2d_pdf)
-        for de_ in des:
-            out_age_pdf += de_.total_age_pdf
-            out_2d_pdf += de_.total_2d_pdf
+        out_age_pdf = np.zeros_like(des_age[0])
+        out_2d_pdf = np.zeros_like(des_2d[0])
+        for de_ in des_age:
+            out_age_pdf += de_
+        for de_ in des_2d:
+            out_2d_pdf += de_
         output_prefix = '%s_stacked' % args.output[:-5]
         np.savetxt('%s_age_pdf.dat' % output_prefix,
                    np.vstack((AGE_RANGE, out_age_pdf)).T)

@@ -135,20 +135,19 @@ if args.parallel:
                     new_row['exec_time'] = exec_time.interval
                     new_row['pid'] = os.getpid()
                 tbl.add_row(new_row)
-        return tbl, des.total_age_pdf, des.total_2d_pdf, bad
+        return tbl, des, bad
 
     with mp.Pool(processes=pool_size) as pool:
         pool_result = pool.map(run_single, np.array_split(data, pool_size))
-        pool_result, des_age, des_2d, bads = list(zip(*pool_result))
+        pool_result, des, bads = list(zip(*pool_result))
     final = vstack(pool_result)
     unfitted = vstack(bads)
     if de.config['dump_pdf']:
-        out_age_pdf = np.zeros_like(des_age[0])
-        out_2d_pdf = np.zeros_like(des_2d[0])
-        for de_ in des_age:
-            out_age_pdf += de_
-        for de_ in des_2d:
-            out_2d_pdf += de_
+        out_age_pdf = np.zeros_like(des[0].total_age_pdf)
+        out_2d_pdf = np.zeros_like(des[0].total_2d_pdf)
+        for de_ in des:
+            out_age_pdf += de_.total_age_pdf
+            out_2d_pdf += de_.total_2d_pdf
         output_prefix = '%s_stacked' % args.output[:-5]
         np.savetxt('%s_age_pdf.dat' % output_prefix,
                    np.vstack((AGE_RANGE, out_age_pdf)).T)

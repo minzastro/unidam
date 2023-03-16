@@ -49,7 +49,7 @@ def plot_pdf(xid, fits, name, data, column, ax, each=False,
     n_total = np.zeros(len(binx))
     for stage in np.sort(np.unique(stages)):
         n, _ = np.histogram(adata[stages == stage], bins,
-                            weights=wdata[stages == stage], normed=True)
+                            weights=wdata[stages == stage], density=True)
         n = n * np.sum(wdata[stages == stage]) / total_weight
         n_total = n_total + n
         w[stage] = np.sum(n)
@@ -203,7 +203,7 @@ if __name__ == '__main__':
 
     folder = args.dump
     if args.dev:
-        folder = f'../iso/{folder}'
+        folder = f'../core/{folder}'
 
     PLOTS = {'A': ('age', 1),
              'M': ('mass', 2),

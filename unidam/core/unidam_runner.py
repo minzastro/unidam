@@ -10,6 +10,11 @@ the command-line.
 """
 from __future__ import print_function, unicode_literals, division, \
     absolute_import
+import os
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
+os.environ['NUMEXPR_NUM_THREADS'] = '1'
+
 from builtins import zip, int
 import numpy as np
 import argparse
@@ -23,6 +28,10 @@ from unidam.core.unidam_main import UniDAMTool
 from unidam.utils.constants import AGE_RANGE
 from unidam.utils.timer import Timer
 from unidam.utils.log import get_logger
+from future import standard_library
+standard_library.install_aliases()
+
+# This is to prevent BLAS from using more than 1 processor!
 
 logger = get_logger("UniDAM_runner", True, '')
 np.set_printoptions(linewidth=200)
@@ -34,6 +43,8 @@ parser.add_argument('-i', '--input', type=str,
                     help='Input file name (any astropy-readable table)')
 parser.add_argument('-o', '--output', type=str, default='result.fits',
                     help='Output file name')
+parser.add_argument('--format', type=str, default='fits',
+                    help='Output file format (one from astropy formats)')
 parser.add_argument('-c', '--config', type=str,
                     required=True,
                     help='Config file name')
@@ -49,11 +60,11 @@ parser.add_argument('--parallax-zero', type=float,
                     help='Parallax zero point value')
 group = parser.add_mutually_exclusive_group()
 group.add_argument('-d', '--dump-results', action="store_true",
-                    default=False,
-                    help='Dump model data for each star')
+                   default=False,
+                   help='Dump model data for each star')
 group.add_argument('-p', '--parallel', action="store_true",
-                    default=False,
-                    help='Run in parallel (uses OMP_NUM_THREADS if given, otherwise 2 threads)')
+                   default=False,
+                   help='Run in parallel (uses OMP_NUM_THREADS if given, otherwise 2 threads)')
 args = parser.parse_args()
 
 with warnings.catch_warnings():
@@ -68,7 +79,7 @@ de = UniDAMTool(config_filename=args.config, config_override=override)
 de.id_column = 'id'  # Default ID column.
 idtype = data.columns[de.id_column].dtype
 if mf.parallax_known:
-    data[de.config['parallax']] += args.parallax_zero
+    data[de.config['parallax']] -= args.parallax_zero
 final = de.get_table(data, idtype)
 unfitted = Table()
 unfitted['id'] = Column(dtype=idtype)
@@ -82,7 +93,8 @@ if args.id is not None:
     ids = (args.id).split(',')
     if idtype.kind == 'S':
         len_id = idtype.itemsize
-        mask = [j.strip() in np.asarray(ids, dtype=str) for j in data[de.id_column]]
+        mask = [j.strip() in np.asarray(ids, dtype=str)
+                for j in data[de.id_column]]
     else:
         mask = [j in np.asarray(ids, dtype=idtype) for j in data[de.id_column]]
     data = data[np.where(mask)]
@@ -97,6 +109,7 @@ if args.parallel:
         pool_size = int(os.environ['OMP_NUM_THREADS'])
     else:
         pool_size = 2
+    logger.info("Running parallel run with %s threads" % pool_size)
 
     def run_single(patch):
         #des = deepcopy(de)
@@ -141,6 +154,7 @@ if args.parallel:
                    np.vstack((AGE_RANGE, out_age_pdf)).T)
         np.savetxt('%s_2d_pdf.dat' % output_prefix, out_2d_pdf)
 else:
+    os.environ['OMP_NUM_THREADS'] = '1'
     if args.id is not None:
         # Debug mode is allowed only when a list of IDs is given.
         # This is done to prevent dumping HUGE amounts of data
@@ -180,8 +194,10 @@ with warnings.catch_warnings():
     if os.path.exists(args.output):
         os.remove(args.output)
     final.meta = vars(args)
+    final.meta.update(de.config)
     unfitted.meta = vars(args)
-    final.write(args.output)
+    unfitted.meta.update(de.config)
+    final.write(args.output, format=args.format)
     if os.path.exists('%s_unfitted.fits' % args.output):
         os.remove('%s_unfitted.fits' % args.output)
-    unfitted.write('%s_unfitted.fits' % args.output)
+    unfitted.write('%s_unfitted.fits' % args.output, format='fits')

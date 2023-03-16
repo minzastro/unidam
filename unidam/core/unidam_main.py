@@ -3,6 +3,7 @@ import os
 import warnings
 from collections import OrderedDict
 from configparser import ConfigParser
+from os.path import getmtime
 import numpy as np
 import simplejson as json
 from astropy.table import Table, Column
@@ -19,9 +20,10 @@ from unidam.utils import constants
 import sys
 
 if sys.version_info.minor <= 7:
-    from unidam.utils.dummy_log import  get_logger
+    from unidam.utils.dummy_log import get_logger
 else:
     from unidam.utils.log import get_logger
+
 
 def ensure_dir(directory):
     """
@@ -131,6 +133,9 @@ class UniDAMTool():
         for key, value in self.DEFAULTS.items():
             if not config.has_option('general', key):
                 config.set('general', key, str(value))
+        for _, section in config.items():
+            for key, value in section.items():
+                self.config[key] = str(value)[:60 - len(key)]
         self.keep_columns = get_splitted(config, 'keep_columns')
         self.fitted_columns = get_splitted(config, 'fitted_columns')
         # This array contains indices in the model table for input data
@@ -158,13 +163,12 @@ class UniDAMTool():
             self.fitted_columns.insert(0, 'stage')
         else:
             move_to_beginning(self.fitted_columns, 'stage')
-            # raise ValueError('stage column has to be in the list of fitted columns')
         # This is the index of column with output model weights.
         # In the output table (mf.model_data) there are columns for
         # fitted columns + columns for L_iso, L_sed and
         # at the very end - weight column
         self.w_column = len(self.fitted_columns) + 2
-        mf.max_param_err = config.getint('general', 'max_param_err')
+        mf.max_param_err = config.getfloat('general', 'max_param_err')
         mf.use_model_weight = True
         mf.use_magnitude_probability = \
             config.getboolean('general', 'use_magnitudes')
@@ -220,9 +224,10 @@ class UniDAMTool():
         self.logger.info('Opening FITS')
         table = fits.open(filename)
         self.model_data = None
-        if os.path.exists(filename + '.npy') and os.path.getmtime(filename + '.npy') > os.path.getmtime(filename):
-                self.logger.info('Opening npy')
-                self.model_data = np.load(filename + '.npy')
+        if (os.path.exists(filename + '.npy') and
+                getmtime(filename + '.npy') > getmtime(filename)):
+            self.logger.info('Opening npy')
+            self.model_data = np.load(filename + '.npy')
         if self.model_data is None:
             self.logger.info('Converting data to nparray')
             v = table[1].data
@@ -236,10 +241,15 @@ class UniDAMTool():
             (self.model_data[:, :-1],
              np.arange(len(self.model_data))[:, np.newaxis],
              self.model_data[:, -1][:, np.newaxis]))
-        self.age_grid = np.asarray(table[2].data, dtype=float)
+        if len(table) >= 3:
+            self.age_grid = np.asarray(table[2].data, dtype=float)
+        else:
+            self.age_grid = np.unique(self.model_data[:, table[1].columns.names.index('age')])
         self.model_column_names = [column.name for column in table[1].columns]
-        self.fitted_columns = self._names_to_indices(self.fitted_columns, validate=True)
-        self.model_columns = self._names_to_indices(self.model_columns, validate=True)
+        self.fitted_columns = self._names_to_indices(self.fitted_columns,
+                                                     validate=True)
+        self.model_columns = self._names_to_indices(self.model_columns,
+                                                    validate=True)
         self.default_bands = self._names_to_indices(self.default_bands)
         self.mag_names = np.array(list(self.default_bands.keys()), dtype=str)
         self.logger.info('Pass to F90')
@@ -261,15 +271,16 @@ class UniDAMTool():
         Check if the row is good for processing.
         """
         if np.isnan(self.param).any():
-            self.logger.warn('No spectral params for %s' % row_id)
+            self.logger.warn('No spectral params for %s', row_id)
             return {'id': row_id,
                     'error': 'No spectral params'}
         if np.any(self.param < -100.) or np.any(self.param_err <= 0):
-            self.logger.warn('No spectral params or invalid params for %s' % row_id)
+            self.logger.warn('No spectral params or invalid params for %s',
+                             row_id)
             return {'id': row_id,
                     'error': 'No spectral params or invalid params'}
         if self.mag.size == 0 and mf.use_photometry:
-            self.logger.warn('No photometry for a %s' % row_id)
+            self.logger.warn('No photometry for a %s', row_id)
             return {'id': row_id,
                     'error': 'No photometry'}
         return None
@@ -302,34 +313,64 @@ class UniDAMTool():
         if mf.parallax_known:
             mf.parallax = row[self.config['parallax']]
             mf.parallax_error = row[self.config['parallax_err']]
-            mf.parallax_l_correction = np.log(norm.cdf(mf.parallax / mf.parallax_error))
+            mf.parallax_l_correction = np.log(norm.cdf(mf.parallax /
+                                                       mf.parallax_error))
             mf.extinction = row[self.config['extinction']]
             mf.extinction_error = row[self.config['extinction_err']]
 
+    def get_proper_spacing(self, m1, m2):
+        """Get optimal spacing for intermediate model generation.
+
+        Args:
+            m1 : model 1 (base model, povides good fit)
+            m2 : model 2 (second model, does not provide the good fit)
+
+        Returns:
+            float : fraction of the distance between m1 and m2 to
+            be populated.
+        """
+        t_current = 1.
+        for param, param_err, model in zip(self.param,
+                                           self.param_err,
+                                           self.model_columns.values()):
+            v1 = m1[model]
+            v2 = m2[model]
+            diff = np.abs(param + mf.max_param_err * param_err - v1)
+            if v2 > v1:
+                t_current = min(t_current, diff / (v2 - v1))
+            elif v1 > v2:  # If v1 == v2 then t is not updated.
+                t_current = min(t_current, diff / (v1 - v2))
+        return t_current
+
     def get_fitting_models(self, row):
         mask = np.ones(len(self.model_data), dtype=bool)
+        # Select all models within N sigmas from the observed point:
         for param, param_err, model in zip(self.param, self.param_err,
                                            self.model_columns.values()):
             mask *= np.abs(self.model_data[:, model] - param) \
                     <= (mf.max_param_err * param_err)
         if mask.sum() == 0:
-            self.logger.warn('No model fitting for %s' % row[self.id_column])
+            self.logger.info('No model fitting for %s' % row[self.id_column])
             return None, None
         xsize = len(self.fitted_columns) + 4
         indices = np.arange(len(mask), dtype=int)[mask]
 
         if mask.sum() > 100000:
+            # There are too many models fitting, we can reduce this number
+            # to 100k
             reduction_factor = int(mask.sum() / 100000) + 1
+            self.logger.info("Too many models, throttling by a factor %s" % reduction_factor)
             indices = indices[::reduction_factor]
 
         model_params, special_params = mf.process_model_set(indices, xsize)
-        if 0 < (model_params[:, -2] > 0).sum() < 50:
-            self.logger.info('Adding more models for %s' % row[self.id_column])
-            max_id = model_params.max() + 1
+        model_mask = model_params[:, -2] > 0
+        if 0 < model_mask.sum() < 50:
+            self.logger.info('Adding more models for %s', row[self.id_column])
             # Add intermediate models
-            ind = np.arange(len(self.model_data), dtype=int)[indices][model_params[:, -2] > 0]
+            ind = np.arange(len(self.model_data),
+                            dtype=int)[indices][model_mask]
             new_models = []
-            new_special = []
+            new_specials = []
             for ii in ind:
                 m1 = self.model_data[ii]
                 for offset in [1, -1]:
@@ -337,36 +378,44 @@ class UniDAMTool():
                     if ii + offset in ind:
                         t_current = 0.5
                     else:
-                        t_current = 1.
-                        for param, param_err, model in zip(self.param, self.param_err,
-                                                           self.model_columns.values()):
-                            v1 = m1[model]
-                            v2 = m2[model]
-                            if v2 > v1:
-                                t_current = min(t_current,
-                                                np.abs(param + mf.max_param_err * param_err - v1) / (v2 - v1))
-                            elif v1 > v2:  # If v1 == v2 then t is not updated.
-                                t_current = min(t_current,
-                                                np.abs(param - mf.max_param_err * param_err - v1) / (v1 - v2))
-                    extra_models = m1 + np.linspace(0, t_current, 50)[:, np.newaxis] * (m2 - m1)
+                        t_current = self.get_proper_spacing(m1, m2)
+                    offset_space = np.linspace(0, t_current, 50)[:, np.newaxis]
+                    extra_models = m1 + offset_space * (m2 - m1)
                     # This is an extra fix for the stage column.
                     extra_models[:, 0] = m1[0]
+                    # Re-weight models
+                    extra_models[:, self.w_column] *= 0.02 * t_current
                     for model in extra_models:
-                        res = mf.process_model(-1, model, xsize)
-                        if res[0] > 0:
-                            new_models.append(res[1])
-                            new_special.append(res[2])
+                        res, new_model, new_special = mf.process_model(-1,
+                                                                       model,
+                                                                       xsize)
+                        if res > 0:
+                            new_models.append(new_model)
+                            new_specials.append(new_special)
             if len(new_models) == 0:
-                self.logger.warn('No model fitting for %s' % row[self.id_column])
+                self.logger.warn('No model fitting for {}',
+                                 row[self.id_column])
                 return None, None
             model_params = np.atleast_2d(new_models)
-            special_params = np.atleast_2d(new_special)
+            special_params = np.atleast_2d(new_specials)
             model_params[:, -1] = np.arange(len(model_params))
             special_params[:, -1] = np.arange(len(model_params))
+        elif model_mask.sum() <= 0:
+            self.logger.info('No model fitting for %s', row[self.id_column])
+            return None, None
         return model_params[model_params[:, -2] > 0], \
-               special_params[model_params[:, -2] > 0]
+            special_params[model_params[:, -2] > 0]
 
-    def get_mode_weights(self, row, model_params):
+    def get_mode_weights(self, id, model_params):
+        """Calculate mode weights for each stage.
+
+        Args:
+            id: ID of the star (for messages)
+            model_params: array of models that fit
+
+        Returns:
+            dictionary of  the shape {Stage: weight}
+        """
         stages = np.asarray(model_params[:, 0], dtype=int)
         uniq_stages = np.unique(stages)
         mode_weight = np.zeros(len(uniq_stages))
@@ -376,14 +425,14 @@ class UniDAMTool():
         total_mode_weight = np.sum(mode_weight)
         if total_mode_weight == 0.:
             # Does this ever work?
-            self.logger.warn('No model fitting (test) for %s' % row[self.id_column])
-            return {'id': row[self.id_column],
+            self.logger.warn('No model fitting (test) for %s', id)
+            return {'id': id,
                     'error': 'No model fitting'}
         try:
             mode_weight = mode_weight / total_mode_weight
         except ZeroDivisionError:
-            self.logger.warn('Zero weight for %s' % row[self.id_column])
-            return {'id': row[self.id_column],
+            self.logger.warn('Zero weight for %s', id)
+            return {'id': id,
                     'error': 'Zero weight'}
         result = {}
         for istage, stage in enumerate(uniq_stages):
@@ -397,20 +446,21 @@ class UniDAMTool():
         # Set maximum differnce between model and observation in units
         # of the observational error.
         self.config['dump'] = dump
+        id = row[self.id_column]
         self.prepare_star(row)
-        validate = self._validate_star(row[self.id_column])
+        validate = self._validate_star(id)
         if validate is not None:
             return validate
         self._push_to_fortran(row)
         if np.isinf(mf.parallax_l_correction):
-            return {'id': row[self.id_column],
+            return {'id': id,
                     'error': 'Parallax is too negative'}
         # HERE THINGS HAPPEN!
         model_params, model_special = self.get_fitting_models(row)
         if model_params is None or len(model_params) == 0:
-            return {'id': row[self.id_column],
+            return {'id': id,
                     'error': 'No model fitting'}
-        stage_weights = self.get_mode_weights(row, model_params)
+        stage_weights = self.get_mode_weights(id, model_params)
         # Setting best stage
         result = []
         for part_weight, part_data, part_special in self.data_splitter(
@@ -423,7 +473,7 @@ class UniDAMTool():
             result[best]['uspdf_priority'] = ibest
         for item in result:
             item.update({'total_uspdfs': len(result),
-                         'id': row[self.id_column]})
+                         'id': id})
             for keep in self.keep_columns:
                 item[keep] = row[keep]
         # Sort by priority
@@ -435,6 +485,17 @@ class UniDAMTool():
         return result
 
     def data_splitter(self, stage_weights, model_params, model_special):
+        """Split data into unimodal sub-PDFs.
+
+        Args:
+            stage_weights: dictionary of  the shape {Stage: weight}
+            model_params: models that fit
+            model_special: "special" model columns
+
+        Yields:
+            tuple of weight, model data and model special columns
+            for each USPDF.
+        """
         stages = np.asarray(model_params[:, 0], dtype=int)
         for stage, mode_weight in stage_weights.items():
             if mode_weight < self.MIN_USPDF_WEIGHT:
@@ -446,7 +507,8 @@ class UniDAMTool():
             # Split stage data into USPDFs
             for part_data in self.split_multimodal(stage_data):
                 part_weight = mode_weight * \
-                              (np.sum(part_data[:, self.w_column]) / current_stage_weight)
+                              (np.sum(part_data[:, self.w_column]) /
+                               current_stage_weight)
                 if part_weight < self.MIN_USPDF_WEIGHT:
                     # ignore USPDF with small weight
                     continue
@@ -462,16 +524,19 @@ class UniDAMTool():
         self.mag_names = np.array(list(self.default_bands), dtype=str)
         self.mag = np.zeros(len(self.default_bands))
         self.mag_err = np.zeros_like(self.mag)
+        self.Rk = np.zeros_like(self.mag)
         for iband, band in enumerate(self.default_bands):
             self.mag[iband] = row['%smag' % band]
             # Storing the inverse uncertainty squared
             # for computational efficiency.
-            if np.abs(self.mag[iband]) > 50 or row['e_%smag' % band] > 50  or row['e_%smag' % band] < 1e-4:
+            if (np.abs(self.mag[iband]) > 50 or
+                row['e_%smag' % band] > 50 or
+                    row['e_%smag' % band] < 1e-4):
                 self.mag[iband] = np.nan
                 self.mag_err[iband] = np.nan
             else:
                 self.mag_err[iband] = 1. / (row['e_%smag' % band]) ** 2
-        self.Rk = np.array([self.RK[band] for band in self.default_bands.keys()])
+            self.Rk[iband] = self.RK[band]
         self.abs_mag = np.array(list(self.default_bands.values()), dtype=int)
         # Filter out bad data:
         self._apply_mask(~(np.isnan(self.mag_err) + np.isnan(self.mag)))
@@ -536,7 +601,8 @@ class UniDAMTool():
                                    stage_data[:, self.w_column])
             step = max(step, HistogramAnalyzer.MINIMUM_STEP[param])
             xbins = np.arange(stage_data[:, split_column].min() - step * 0.5,
-                              stage_data[:, split_column].max() + step * 1.5, step)
+                              stage_data[:, split_column].max() + step * 1.5,
+                              step)
             max_order = 4
         histogram = np.histogram(stage_data[:, split_column],
                                  bins=xbins,
@@ -631,7 +697,8 @@ class UniDAMTool():
                 np.any(adata[:, self.w_column + 1] < 0):
             self.logger.warn("Cannot do anything for added models...so far")
             return sed_dict
-        mdata = mf.models[np.asarray(adata[:, self.w_column + 1] - 1, dtype=int)]
+        mdata = mf.models[np.asarray(adata[:, self.w_column + 1] - 1,
+                                     dtype=int)]
         dm = adata[:, list(self.fitted_columns.keys()).index('distance_modulus')]
         ext = adata[:, list(self.fitted_columns.keys()).index('extinction')]
         weight = adata[:, self.w_column]
@@ -658,17 +725,17 @@ class UniDAMTool():
         if mf.parallax_known:
             fracpar = -mf.parallax / mf.parallax_error
             if fracpar > -10:
-                return {'p_sed': 1. - get_modified_chi2(fracpar, dof,
-                                                        2. * (l_sed - mf.parallax_l_correction)),
-                        'p_best': 1. - get_modified_chi2(fracpar, dof + len(self.model_columns),
-                                                         2. * (l_best - mf.parallax_l_correction)),
-                        }
-            else:
-                return {'p_sed': 1. - chi2.cdf(2. * l_sed, dof),
-                        'p_best': 1. - chi2.cdf(2. * l_best, dof + len(self.model_columns))}
-        else:
-            return {'p_sed': 1. - chi2.cdf(2. * l_sed, dof),
-                    'p_best': 1. - chi2.cdf(2. * l_best, dof + len(self.model_columns))}
+                return {
+                    'p_sed': 1. - get_modified_chi2(
+                        fracpar, dof,
+                        2. * (l_sed - mf.parallax_l_correction)),
+                    'p_best': 1. - get_modified_chi2(
+                        fracpar, dof + len(self.model_columns),
+                        2. * (l_best - mf.parallax_l_correction)),
+                       }
+        return {'p_sed': 1. - chi2.cdf(2. * l_sed, dof),
+                'p_best': 1. - chi2.cdf(2. * l_best, dof +
+                                        len(self.model_columns))}
 
     def get_row(self, xdata, xspecial, xweight):
         """

@@ -1,4 +1,4 @@
 #!/bin/bash
-cd unidam/iso
+cd unidam/core
 ./build_fortran.sh
-cd ../..
+cd -

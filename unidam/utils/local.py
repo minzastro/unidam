@@ -1,25 +1,34 @@
 import numpy as np
 from scipy.stats import norm, truncnorm
 from unidam.utils.extra_functions import unidam_extra_functions as uef
+from unidam.utils.trunc_revexpon import trunc_revexpon
+from unidam.utils.trunc_line import TruncLine
+
 skew_gauss = uef.skew_normal_pdf_arr
+
+
 class studentst():
     @classmethod
     def pdf(cls, x, mu, sigma, degrees_of_freedom):
-           result = uef.student_pdf(x, np.abs(degrees_of_freedom), mu, np.abs(sigma))
-           return result / (result.sum() * (x[1] - x[0]))
+        result = uef.student_pdf(x, mu, np.abs(sigma),
+                                 np.abs(degrees_of_freedom))
+        return result #/ result.sum()
 
 
-try:
-    from unidam.skewnorm_boosted import skewnorm_boosted as skewnorm
-except ImportError:
-    # No skewnorm_boost library available.
-    # A local python-based version will be used,
-    # which is considerably slower.
-    from unidam.utils.skewnorm_local import skewnorm_local as skewnorm
+class skewnorm():
+    @classmethod
+    def pdf(cls, x, mu, sigma, skew):
+        result = uef.skew_normal_pdf_arr(x, mu, sigma, skew)
+        return result
+
+class exponent():
+    @classmethod
+    def pdf(cls, x, mu, sigma):
+        """Re-normalized exponent distribution."""
+        result = np.exp(-np.abs(x - mu) / sigma)
+        return result #/  result.sum()
 
 
-from unidam.utils.trunc_revexpon import trunc_revexpon
-from unidam.utils.trunc_line import TruncLine
 
 """
 A collection of tools to convert UniDAM output parameters to
@@ -43,7 +52,7 @@ def get_param(fit, par):
       L: truncated Laplacian (exponent) distribution.
     """
     if fit == 'S':
-        return skewnorm, [par[2], par[0], par[1]]
+        return skewnorm, par[:3]
     elif fit == 'F':
         return TruncLine, par[:4]
     elif fit == 'G':
@@ -54,16 +63,22 @@ def get_param(fit, par):
         beta = (par[3] - par[0]) / par[1]
         return truncnorm, [alpha, beta, par[0], sigma]
     elif fit == 'P':
-        return studentst, par[:-2]
+        if len(par) == 3:
+            return studentst, par
+        else:
+            return studentst, par[:-2]
     elif fit == 'L':
-        sigma = np.abs(par[1])
-        if par[0] < par[2]:
-            par[0] = par[2] - 1e-3
-        elif par[0] > par[3]:
-            par[0] = par[3] + 1e-3
-        alpha = (par[2] - par[0]) / sigma
-        beta = (par[3] - par[0]) / sigma
-        return trunc_revexpon, [alpha, beta, par[0], sigma]
+        if len(par) >= 4:
+            sigma = np.abs(par[1])
+            if par[0] < par[2]:
+                par[0] = par[2] - 1e-3
+            elif par[0] > par[3]:
+                par[0] = par[3] + 1e-3
+            alpha = (par[2] - par[0]) / sigma
+            beta = (par[3] - par[0]) / sigma
+            return trunc_revexpon, [alpha, beta, par[0], sigma]
+        else:
+            return exponent, par
     else:
         raise ValueError('Unknown fit type: %s' % fit)
     return None
@@ -75,7 +90,7 @@ def get_ydata(name, row, binx):
     """
     if row['%s_fit' % name] in 'GSTPLF':
         func, par = get_param(row['%s_fit' % name], row['%s_par' % name])
-        print(row['%s_fit' % name], func, par)
+        #print(row['%s_fit' % name], func, par)
         ydata = func.pdf(binx, *par)
         if np.any(ydata) < 0:
             print(name, ydata)

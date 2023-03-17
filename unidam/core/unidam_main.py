@@ -359,7 +359,7 @@ class UniDAMTool():
             # There are too many models fitting, we can reduce this number
             # to 100k
             reduction_factor = int(mask.sum() / 100000) + 1
-            self.logger.info("Too many models, throttling by a factor %s" % reduction_factor)
+            self.logger.debug("Too many models, throttling by a factor %s" % reduction_factor)
             indices = indices[::reduction_factor]
 
         model_params, special_params = mf.process_model_set(indices, xsize)

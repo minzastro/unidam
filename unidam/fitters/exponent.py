@@ -1,10 +1,15 @@
 import numpy as np
 from unidam.fitters import basic
-
+import warnings
 
 def exponent(self, x, mu, sigma):
     """Re-normalized exponent distribution."""
-    result = np.exp(-np.abs(x - mu) / sigma)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        result = np.exp(-np.abs(x - mu) / sigma)
+        #print(mu, sigma, x, result)
+        if np.any(np.isinf(result)) or np.nansum(result) == 0.:
+            return np.zeros_like(result)
     return result / ((x[1] - x[0]) * result.sum())
 
 

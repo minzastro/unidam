@@ -22,7 +22,7 @@ import os
 import sys
 import traceback
 import warnings
-from astropy.table import Table, Column
+from astropy.table import Table, Column, MaskedColumn
 from unidam.core.model_fitter import model_fitter as mf
 from unidam.core.unidam_main import UniDAMTool
 from unidam.utils.constants import AGE_RANGE
@@ -70,6 +70,12 @@ args = parser.parse_args()
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     data = Table.read(args.input)
+    replace_masked = []
+    for column in data.columns:
+        if data[column].dtype.char == 'f' and isinstance(data[column], MaskedColumn):
+            replace_masked.append(column)
+    for name in replace_masked:
+        data.replace_column(name, data[name].filled(np.nan))
 
 override = {}
 for item in args.config_override:

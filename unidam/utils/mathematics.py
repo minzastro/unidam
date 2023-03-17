@@ -10,7 +10,6 @@ INV_SQRT2 = 1./np.sqrt(2.)
 INV_SQRT2Pi = 1./np.sqrt(2.*np.pi)
 MAD_COEFF = 1.4836
 
-
 def kl_divergence(x, func, par, y):
     """
     Symmetric Kullback-Leibler divergence value.

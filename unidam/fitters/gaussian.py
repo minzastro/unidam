@@ -3,7 +3,7 @@ from scipy.optimize import curve_fit
 from unidam.utils.mathematics import kl_divergence, wstatistics
 from unidam.fitters import basic
 from unidam.utils.extra_functions import unidam_extra_functions as uef
-
+from scipy.stats import norm
 
 def tgauss(dummy, x, mu, sigma, lower, upper):
     """
@@ -22,13 +22,15 @@ class TGaussianFit(basic.PdfFitter):
 
     FUNC = tgauss
 
-    def _get_residual(self, solution):
-        return np.sum((self.y -
-                       self.FUNC(self.x,
-                                 solution[0][0],
-                                 solution[0][1],
-                                 self.x[solution[1]],
-                                 self.x[solution[2]])) ** 2)
+    def _get_residual_sum_sq(self, solution):
+        return np.sum(self._get_residual_values(solution) ** 2)
+
+    def _get_residual_values(self, solution):
+        return self.y - self.FUNC(self.x,
+                                  solution[0][0],
+                                  solution[0][1],
+                                  self.x[solution[1]],
+                                  self.x[solution[2]])
 
     def _get_function(self, solution):
         def fit_fun(x, mu, sigma):
@@ -51,11 +53,21 @@ class TGaussianFit(basic.PdfFitter):
             return self.init_params
 
     def _move_lower(self, solution):
-        new_solution = [solution[0], solution[1] - 1, solution[2], 0, False]
+        y_pred = norm.pdf(x=self.x, loc=solution[0][0], scale=solution[0][1])
+        #import ipdb; ipdb.set_trace()
+        lower = solution[1]
+        while lower > 0:
+            lower -= 1
+            #print('-->', lower, self.y[lower], y_pred[lower])
+            if np.abs(y_pred[lower]) < np.abs(self.y[lower] - y_pred[lower]):
+                lower += 1
+                break
+        new_solution = [solution[0], lower - 1, solution[2], 0, False]
+        #print(solution, new_solution)
         test = self._local_fit(new_solution)
         if test is not None:
             new_solution[0] = test
-            residual = self._get_residual(new_solution)
+            residual = self._get_residual_sum_sq(new_solution)
             new_solution[3] = residual
             if residual < solution[3]:
                 new_solution[4] = True
@@ -72,7 +84,7 @@ class TGaussianFit(basic.PdfFitter):
         test = self._local_fit(new_solution)
         if test is not None:
             new_solution[0] = test
-            residual = self._get_residual(new_solution)
+            residual = self._get_residual_sum_sq(new_solution)
             new_solution[3] = residual
             if residual < solution[3]:
                 new_solution[4] = True
@@ -85,7 +97,6 @@ class TGaussianFit(basic.PdfFitter):
         return new_solution
 
     def _fit(self):
-        #import ipdb; ipdb.set_trace()
         modepos = np.argmax(self.y)
         w = np.where(self.y > self.y.max() * 0.2)[0]
         self.lower = w[0]
@@ -97,7 +108,7 @@ class TGaussianFit(basic.PdfFitter):
                     self.lower, self.upper,
                     0, True]
         solution[0] = self._local_fit(solution)
-        solution[3] = self._get_residual(solution)
+        solution[3] = self._get_residual_sum_sq(solution)
         if modepos > 0:
             while solution[-1] and self.lower > 0:
                 # Increase lower bound gradually,

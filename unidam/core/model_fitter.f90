@@ -71,6 +71,7 @@ real, save :: parallax_L_correction
 integer, save :: distance_prior = 1
 real, save :: prior_parameter = 2e3
 
+real, save :: log_10 = log(10.)
 contains
 
 ! ALLOCATION ROUTINES
@@ -167,8 +168,12 @@ subroutine solve_for_distance_with_parallax(vector, solution)
   real, intent(inout) :: solution(2)
   integer :: info
   real :: tol=1e-8
-  real, dimension(2) :: fvec, diag
-    call hbrd(fcnx, 2, solution, fvec, epsilon(tol), tol, info, diag)
+  real, dimension(2) :: fvalue, diag
+  real :: CkErrSum, Ck2ErrSum, ErrSum
+  ErrSum = sum(mag_err)
+  CkErrSum = sum(Ck * mag_err)
+  Ck2ErrSum = sum(Ck * Ck * mag_err)
+    call hbrd(fcnx, 2, solution, fvalue, epsilon(tol), tol, info, diag)
     return
     contains
     SUBROUTINE FCNX(N, X, FVEC, IFLAG)
@@ -184,16 +189,16 @@ subroutine solve_for_distance_with_parallax(vector, solution)
           else
             extra = 0
           endif
-          FVEC(1) = -vector(1) + sum(Ck * X(2) * mag_err) + &
-            sum(X(1) * mag_err) - &
-            0.2 * log(10.) * pi * (pi - parallax)/ parallax_error**2
+          FVEC(1) = -vector(1) + CkErrSum * X(2) + &
+            ErrSum * X(1) - &
+            0.2 * log_10 * pi * (pi - parallax)/ parallax_error**2
           if (distance_prior.eq.1) then
-            FVEC(1) = FVEC(1) + 0.4 * log(10.)
+            FVEC(1) = FVEC(1) + 0.4 * log_10
           else if (distance_prior.eq.2) then
-            FVEC(1) = FVEC(1) + 0.2 * log(10.) * (2. - 1./(pi * prior_parameter))
+            FVEC(1) = FVEC(1) + 0.2 * log_10 * (2. - 1./(pi * prior_parameter))
           endif
-          FVEC(2) = -vector(2) + sum(Ck * Ck * X(2) * mag_err) + &
-            sum(Ck * X(1) * mag_err) + extra
+          FVEC(2) = -vector(2) + Ck2ErrSum * X(2) + &
+            CkErrSum * X(1) + extra
     END SUBROUTINE FCNX
 end subroutine solve_for_distance_with_parallax
 

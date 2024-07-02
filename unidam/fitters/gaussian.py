@@ -51,14 +51,15 @@ class TGaussianFit(basic.PdfFitter):
                 return self.init_params
         except ValueError:
             return self.init_params
+        except RuntimeError:
+            return self.init_params
+
 
     def _move_lower(self, solution):
         y_pred = norm.pdf(x=self.x, loc=solution[0][0], scale=solution[0][1])
-        #import ipdb; ipdb.set_trace()
         lower = solution[1]
         while lower > 0:
             lower -= 1
-            #print('-->', lower, self.y[lower], y_pred[lower])
             if np.abs(y_pred[lower]) < np.abs(self.y[lower] - y_pred[lower]):
                 lower += 1
                 break

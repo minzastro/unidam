@@ -16,3 +16,5 @@ unidam/.ipynb_checkpoints/*
 unidam/core/.build/*
 unidam/core/.ipynb_checkpoints/*
 unidam.egg-info/*
+/nbproject/
+/.ropeproject/

@@ -217,7 +217,7 @@ if __name__ == '__main__':
             rows = 1
         else:
             cols = 2
-            rows = len(args.what) // 2 + 1
+            rows = (len(args.what) + 1) // 2
         figsize = plt.rcParams['figure.figsize']
         fig = plt.figure(figsize=(figsize[0] * cols, figsize[1] * rows))
     plt.rcParams.update({'font.size': 18})

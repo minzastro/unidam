@@ -1,17 +1,15 @@
 # app.py
-from flask import Flask, request, send_file, render_template_string, jsonify, send_from_directory
+from flask import Flask, request, render_template_string, jsonify, session, send_from_directory
 import io
-import codecs
 from astropy.io.votable import parse_single_table
 from astropy.io.votable.tree import Param
 from astropy.utils.xml.writer import XMLWriter
 import pandas as pd
 import os
 import uuid
-from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-
+app.secret_key = 'your_secret_key'
 
 def runProcessing(votable):
     # Get the current time
@@ -63,6 +61,7 @@ def upload():
 
         # Convert the updated VOTable to a pandas DataFrame for HTML rendering
         df = processed_votable.to_table().to_pandas()
+        session['dataframe'] = df.to_json()
         html_table = df.to_html(classes='table table-striped', index=False)
         html_table = html_table.replace('<tr>', '<tr onclick="openRowData(this)">')
 
@@ -113,6 +112,7 @@ def upload():
 @app.route('/row_data/<int:index>', methods=['GET'])
 def get_row_data(index):
     # Convert the row at the given index to JSON format and return it
+    df = pd.read_json(session['dataframe'])
     return jsonify(df.iloc[index].to_dict())
 
 @app.route('/cache/<path:filename>', methods=['GET'])
